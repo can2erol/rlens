@@ -54,26 +54,43 @@ def train_single(
     eval_interval: int = 0,
     eval_episodes: int = 10,
 ) -> Path:
-    enable_mps_fallback()
-    dev = pick_device(device)
-    seed_everything(seed)
-
-    # off-policy algos default to a single env; on-policy benefits from several
-    if num_envs is None:
-        num_envs = 1 if algo.lower() in ("dqn", "sac") else 8
-
+    """Convenience wrapper: build a TrainConfig from kwargs and run it."""
     cfg = TrainConfig(
         algo=algo,
         env_id=env_id,
         total_steps=total_steps,
         seed=seed,
-        device=str(dev),
-        num_envs=num_envs,
+        device=device,
+        num_envs=num_envs if num_envs is not None else 0,
         record_video=record_video,
         algo_overrides=algo_overrides or {},
         eval_interval_steps=eval_interval,
         eval_episodes=eval_episodes,
     )
+    return run_config(cfg, runs_dir=runs_dir, name=name, progress=progress)
+
+
+def run_config(
+    cfg: TrainConfig,
+    runs_dir: Path = Path("runs"),
+    name: str | None = None,
+    progress: bool = True,
+) -> Path:
+    """Train from a fully-formed :class:`TrainConfig` and write a run dir.
+
+    Resolves the device and the ``num_envs=0`` auto default in place, so the config
+    persisted to ``run.json`` reflects exactly what ran.
+    """
+    enable_mps_fallback()
+    dev = pick_device(cfg.device)
+    cfg.device = str(dev)
+    seed_everything(cfg.seed)
+
+    # off-policy algos default to a single env; on-policy benefits from several
+    if cfg.num_envs <= 0:
+        cfg.num_envs = 1 if cfg.algo.lower() in ("dqn", "sac") else 8
+
+    algo, env_id, seed = cfg.algo, cfg.env_id, cfg.seed
 
     run_name = name or default_run_name(cfg)
     run_dir = Path(runs_dir) / run_name
@@ -88,11 +105,11 @@ def train_single(
         }
     )
 
-    env = EnvManager(env_id, num_envs=num_envs, seed=seed)
+    env = EnvManager(env_id, num_envs=cfg.num_envs, seed=seed)
     algo_obj = build_algo(algo, env, dev, cfg.algo_overrides)
 
     video_cb = None
-    if record_video:
+    if cfg.record_video:
         from rlens.telemetry.frames import record_episode_video
 
         def video_cb(step: int) -> None:
@@ -124,13 +141,13 @@ def train_single(
         env,
         rec,
         dev,
-        total_steps=total_steps,
+        total_steps=cfg.total_steps,
         rollout_len=cfg.rollout_len,
         update_every=cfg.update_every,
         learning_starts=cfg.learning_starts,
         progress=progress,
         video_cb=video_cb,
-        video_interval=cfg.video_interval_steps if record_video else 0,
+        video_interval=cfg.video_interval_steps if cfg.record_video else 0,
         eval_cb=eval_cb,
         eval_interval=cfg.eval_interval_steps,
     )

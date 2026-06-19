@@ -18,7 +18,7 @@ class TrainConfig:
     total_steps: int = 100_000
     seed: int = 0
     device: str = "auto"
-    num_envs: int = 8
+    num_envs: int = 0              # 0 = auto (1 for off-policy, 8 for on-policy)
     rollout_len: int = 128            # on-policy only
     update_every: int = 1             # off-policy: env steps between updates
     learning_starts: int = 1000       # off-policy: random steps before learning

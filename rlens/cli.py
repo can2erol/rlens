@@ -18,34 +18,69 @@ DEFAULT_RUNS_DIR = Path("runs")
 
 @app.command()
 def train(
-    algo: str = typer.Option(..., help="Algorithm: ppo | dqn | sac."),
-    env: str = typer.Option("CartPole-v1", help="Gymnasium env id."),
-    steps: int = typer.Option(100_000, help="Total environment steps."),
-    seed: int = typer.Option(0, help="Random seed."),
-    device: str = typer.Option("auto", help="auto | mps | cuda | cpu."),
+    algo: str | None = typer.Option(None, help="Algorithm: ppo | dqn | sac."),
+    env: str | None = typer.Option(None, help="Gymnasium env id."),
+    steps: int | None = typer.Option(None, help="Total environment steps."),
+    seed: int | None = typer.Option(None, help="Random seed."),
+    device: str | None = typer.Option(None, help="auto | mps | cuda | cpu."),
+    num_envs: int | None = typer.Option(None, help="Parallel envs (0/unset = auto)."),
+    config: Path | None = typer.Option(
+        None, help="YAML run config used as the base (CLI flags and --set override it)."
+    ),
+    set_: list[str] = typer.Option(
+        None, "--set", help="Override a hyperparameter, e.g. --set lr=3e-4 (repeatable)."
+    ),
     runs_dir: Path = typer.Option(DEFAULT_RUNS_DIR, help="Where run dirs are written."),
     name: str | None = typer.Option(None, help="Run name (default: auto-generated)."),
     record_video: bool = typer.Option(False, help="Capture rollout frames for video."),
-    eval_interval: int = typer.Option(
-        0, help="Env steps between deterministic eval episodes (0 = off)."
+    eval_interval: int | None = typer.Option(
+        None, help="Env steps between deterministic eval episodes (0 = off)."
     ),
-    eval_episodes: int = typer.Option(10, help="Episodes per evaluation."),
+    eval_episodes: int | None = typer.Option(None, help="Episodes per evaluation."),
 ) -> None:
-    """Train a single policy and stream telemetry to a run dir."""
-    from rlens.experiment.run import train_single
+    """Train a single policy and stream telemetry to a run dir.
 
-    run_dir = train_single(
-        algo=algo,
-        env_id=env,
-        total_steps=steps,
-        seed=seed,
-        device=device,
-        runs_dir=runs_dir,
-        name=name,
-        record_video=record_video,
-        eval_interval=eval_interval,
-        eval_episodes=eval_episodes,
-    )
+    Config precedence (low to high): defaults < --config YAML < explicit flags < --set.
+    """
+    import yaml
+
+    from rlens.experiment.config import TrainConfig
+    from rlens.experiment.overrides import apply_overrides, parse_set
+    from rlens.experiment.run import run_config
+
+    # base: a config file if given, else dataclass defaults
+    if config is not None:
+        cfg = TrainConfig.from_dict(yaml.safe_load(Path(config).read_text()) or {})
+    else:
+        cfg = TrainConfig()
+
+    if config is None and algo is None:
+        raise typer.BadParameter("specify --algo (or provide --config)")
+
+    # explicit CLI flags override the base
+    flag_overrides = {
+        "algo": algo,
+        "env_id": env,
+        "total_steps": steps,
+        "seed": seed,
+        "device": device,
+        "num_envs": num_envs,
+        "eval_interval_steps": eval_interval,
+        "eval_episodes": eval_episodes,
+    }
+    for key, value in flag_overrides.items():
+        if value is not None:
+            setattr(cfg, key, value)
+    if record_video:
+        cfg.record_video = True
+
+    # --set has the final say
+    try:
+        apply_overrides(cfg, parse_set(set_))
+    except ValueError as e:
+        raise typer.BadParameter(str(e)) from e
+
+    run_dir = run_config(cfg, runs_dir=runs_dir, name=name)
     typer.echo(f"Run written to {run_dir}")
 
 

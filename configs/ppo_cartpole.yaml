@@ -1,0 +1,13 @@
+# Example single-run config for `rlens train --config configs/ppo_cartpole.yaml`.
+# Any field here is overridable on the command line (explicit flags and --set win).
+algo: ppo
+env_id: CartPole-v1
+total_steps: 100000
+num_envs: 8
+rollout_len: 128
+eval_interval_steps: 10000
+eval_episodes: 10
+algo_overrides:
+  lr: 0.0003
+  gamma: 0.99
+  hidden: [64, 64]

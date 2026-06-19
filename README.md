@@ -49,6 +49,26 @@ from the noisy `rollout/episodic_return`), pass `--eval-interval`:
 rlens train --algo dqn --env CartPole-v1 --eval-interval 5000 --eval-episodes 10
 ```
 
+## Configuration
+
+Set any hyperparameter from the command line with `--set key=value` — algorithm knobs
+(`lr`, `gamma`, `batch_size`, `hidden`, ...) and run-level knobs (`num_envs`, `rollout_len`,
+`learning_starts`, ...) share one namespace and are type-checked against the config schema:
+
+```bash
+rlens train --algo sac --env Pendulum-v1 --set lr=3e-4 --set hidden=[256,256] --set tau=0.01
+```
+
+An unknown key fails immediately and lists the valid ones. For repeatable runs, put the
+config in YAML and override pieces on the command line:
+
+```bash
+rlens train --config configs/ppo_cartpole.yaml --steps 200000 --set lr=1e-3
+```
+
+Precedence is **defaults < `--config` < explicit flags < `--set`**. The fully-resolved
+config (including library versions and git SHA) is saved to each run's `run.json`.
+
 ## Algorithms
 
 | Algo | Type        | Action space |
