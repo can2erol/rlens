@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,12 +8,25 @@ version = "0.1.0"
 description = "An observability-first reinforcement-learning training & benchmarking library."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "can.erol" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Can Erol" }]
+keywords = [
+    "reinforcement-learning", "rl", "pytorch", "gymnasium",
+    "observability", "dashboard", "ppo", "dqn", "sac", "benchmarking",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "torch>=2.2",
     "numpy>=1.26",
-    "gymnasium[classic-control,box2d]>=0.29",
+    "gymnasium[classic-control]>=0.29",
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
     "imageio>=2.34",
@@ -24,7 +37,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Box2D envs (LunarLander, BipedalWalker) need a compiler/swig — kept optional so the
+# core install stays painless. `pip install rlens[box2d]`.
+box2d = ["gymnasium[box2d]>=0.29"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/can2erol/rlens"
+Repository = "https://github.com/can2erol/rlens"
+Issues = "https://github.com/can2erol/rlens/issues"
 
 [project.scripts]
 rlens = "rlens.cli:app"

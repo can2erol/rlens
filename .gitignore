@@ -9,6 +9,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# build artifacts
+build/
+dist/
+
 # rlens run artifacts
 runs/
 runs_*/

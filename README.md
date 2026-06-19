@@ -1,11 +1,21 @@
 # rlens
 
+[![CI](https://github.com/can2erol/rlens/actions/workflows/ci.yml/badge.svg)](https://github.com/can2erol/rlens/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 An **observability-first** reinforcement-learning training & benchmarking library, built on
 PyTorch and Gymnasium. The headline feature is *visibility*: a local web dashboard that
 streams reward curves, per-layer gradient norms, action/value distributions, and rollout
 video — live, while you train — and overlays multiple runs for benchmarking.
 
+![A PPO policy balancing CartPole-v1 after ~60k steps](docs/demo.gif)
+
+*A PPO policy balancing CartPole-v1 after ~60k steps. Regenerate with
+`python scripts/make_demo_gif.py`.*
+
 > Designed and tested on Apple Silicon (M-series, MPS). No CUDA required.
+> **Status:** early/alpha — the API may still change.
 
 ## Install
 
@@ -13,6 +23,9 @@ video — live, while you train — and overlays multiple runs for benchmarking.
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+
+# optional: Box2D envs (LunarLander, BipedalWalker) — needs a compiler/swig
+pip install -e ".[dev,box2d]"
 ```
 
 ## Quickstart
@@ -107,3 +120,13 @@ rlens/
   experiment/   config, single-run, benchmark grid
   dashboard/    FastAPI server + no-build static SPA
 ```
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+ruff check rlens tests     # lint
+pytest                     # full suite (CPU; ~1 min)
+```
+
+CI runs `ruff` + `pytest` on Python 3.11 and 3.12 for every push and pull request.
