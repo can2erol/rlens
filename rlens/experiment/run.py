@@ -75,12 +75,17 @@ def run_config(
     runs_dir: Path = Path("runs"),
     name: str | None = None,
     progress: bool = True,
+    resume_from: Path | None = None,
 ) -> Path:
     """Train from a fully-formed :class:`TrainConfig` and write a run dir.
 
     Resolves the device and the ``num_envs=0`` auto default in place, so the config
-    persisted to ``run.json`` reflects exactly what ran.
+    persisted to ``run.json`` reflects exactly what ran. If ``resume_from`` points at a
+    checkpoint, the algorithm/optimizer/RNG state is restored and training continues from
+    the saved step (telemetry is appended to the existing run dir).
     """
+    from rlens.experiment.checkpoint import load_checkpoint, save_checkpoint
+
     enable_mps_fallback()
     dev = pick_device(cfg.device)
     cfg.device = str(dev)
@@ -107,6 +112,17 @@ def run_config(
 
     env = EnvManager(env_id, num_envs=cfg.num_envs, seed=seed)
     algo_obj = build_algo(algo, env, dev, cfg.algo_overrides)
+
+    start_step = 0
+    if resume_from is not None:
+        from rlens.core.seeding import set_rng_state
+
+        ckpt = load_checkpoint(resume_from, map_location=dev)
+        algo_obj.load_checkpoint_state(ckpt["algo"])
+        set_rng_state(ckpt["rng"])
+        start_step = int(ckpt["global_step"])
+        if progress:
+            print(f"resumed {run_name} from step {start_step:,} -> target {cfg.total_steps:,}")
 
     video_cb = None
     if cfg.record_video:
@@ -136,6 +152,9 @@ def run_config(
                 step=step,
             )
 
+    def checkpoint_cb(step: int) -> None:
+        save_checkpoint(run_dir, algo_obj, step, cfg.__dict__, keep_last=cfg.checkpoint_keep)
+
     trainer = Trainer(
         algo_obj,
         env,
@@ -150,6 +169,9 @@ def run_config(
         video_interval=cfg.video_interval_steps if cfg.record_video else 0,
         eval_cb=eval_cb,
         eval_interval=cfg.eval_interval_steps,
+        checkpoint_cb=checkpoint_cb,
+        checkpoint_interval=cfg.checkpoint_interval_steps,
+        start_step=start_step,
     )
 
     status = "completed"
@@ -162,6 +184,7 @@ def run_config(
         raise
     finally:
         torch.save(algo_obj.state_dict(), run_dir / "policy.pt")
+        save_checkpoint(run_dir, algo_obj, trainer.global_step, cfg.__dict__, keep_last=cfg.checkpoint_keep)
         rec.meta(
             {
                 "name": run_name,
@@ -176,3 +199,37 @@ def run_config(
         env.close()
 
     return run_dir
+
+
+def resume_training(
+    run_dir: Path,
+    total_steps: int | None = None,
+    device: str | None = None,
+    progress: bool = True,
+) -> Path:
+    """Continue an existing run from its latest checkpoint.
+
+    Reconstructs the original :class:`TrainConfig` from ``run.json``, optionally raises the
+    step target (``total_steps``) or changes the device, and appends to the same run dir.
+    """
+    from rlens.experiment.checkpoint import find_latest_checkpoint
+    from rlens.telemetry.store import read_meta
+
+    run_dir = Path(run_dir)
+    meta = read_meta(run_dir)
+    if not meta.get("config"):
+        raise ValueError(f"{run_dir / 'run.json'} has no config — cannot resume")
+    cfg = TrainConfig.from_dict(meta["config"])
+
+    ckpt = find_latest_checkpoint(run_dir)
+    if ckpt is None:
+        raise FileNotFoundError(f"no checkpoints found under {run_dir / 'checkpoints'}")
+
+    if device is not None:
+        cfg.device = device
+    if total_steps is not None:
+        cfg.total_steps = total_steps
+
+    return run_config(
+        cfg, runs_dir=run_dir.parent, name=run_dir.name, progress=progress, resume_from=ckpt
+    )

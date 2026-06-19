@@ -36,6 +36,9 @@ class Trainer:
         video_interval: int = 0,
         eval_cb=None,
         eval_interval: int = 0,
+        checkpoint_cb=None,
+        checkpoint_interval: int = 0,
+        start_step: int = 0,
     ):
         self.algo = algo
         self.env = env
@@ -51,12 +54,16 @@ class Trainer:
         self.video_interval = video_interval
         self.eval_cb = eval_cb
         self.eval_interval = eval_interval
+        self.checkpoint_cb = checkpoint_cb
+        self.checkpoint_interval = checkpoint_interval
 
-        self.global_step = 0
+        self.global_step = start_step
+        self._session_start_step = start_step
         self._t_start = time.time()
         self._recent_returns: list[float] = []
-        self._last_video_step = 0
-        self._last_eval_step = 0
+        self._last_video_step = start_step
+        self._last_eval_step = start_step
+        self._last_checkpoint_step = start_step
 
     # ---- shared helpers ---------------------------------------------------
     def _t(self, x: np.ndarray) -> torch.Tensor:
@@ -78,7 +85,8 @@ class Trainer:
 
     def _log_throughput(self) -> None:
         elapsed = max(time.time() - self._t_start, 1e-9)
-        self.rec.scalar("perf/steps_per_sec", self.global_step / elapsed, step=self.global_step)
+        done = self.global_step - self._session_start_step
+        self.rec.scalar("perf/steps_per_sec", done / elapsed, step=self.global_step)
 
     def _maybe_video(self) -> None:
         if self.video_cb is None or self.video_interval <= 0:
@@ -93,6 +101,13 @@ class Trainer:
         if self.global_step - self._last_eval_step >= self.eval_interval:
             self._last_eval_step = self.global_step
             self.eval_cb(self.global_step)
+
+    def _maybe_checkpoint(self) -> None:
+        if self.checkpoint_cb is None or self.checkpoint_interval <= 0:
+            return
+        if self.global_step - self._last_checkpoint_step >= self.checkpoint_interval:
+            self._last_checkpoint_step = self.global_step
+            self.checkpoint_cb(self.global_step)
 
     def _print_progress(self) -> None:
         if not self.progress:
@@ -170,6 +185,7 @@ class Trainer:
                 self._print_progress()
             self._maybe_video()
             self._maybe_eval()
+            self._maybe_checkpoint()
 
     # ---- off-policy (DQN/SAC) --------------------------------------------
     def _train_off_policy(self) -> None:
@@ -224,3 +240,4 @@ class Trainer:
                     self._print_progress()
             self._maybe_video()
             self._maybe_eval()
+            self._maybe_checkpoint()

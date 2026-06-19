@@ -59,6 +59,16 @@ class PPO(Algorithm):
     def modules(self) -> dict[str, nn.Module]:
         return {"actor": self.actor, "critic": self.critic}
 
+    def checkpoint_state(self) -> dict[str, Any]:
+        s = super().checkpoint_state()
+        s["opt"] = self.opt.state_dict()
+        return s
+
+    def load_checkpoint_state(self, state: dict[str, Any]) -> None:
+        super().load_checkpoint_state(state)
+        if "opt" in state:
+            self.opt.load_state_dict(state["opt"])
+
     # ---- interaction ------------------------------------------------------
     @torch.no_grad()
     def act(self, obs: torch.Tensor, deterministic: bool = False) -> tuple[np.ndarray, dict[str, Any]]:

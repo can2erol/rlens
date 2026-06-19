@@ -69,6 +69,22 @@ rlens train --config configs/ppo_cartpole.yaml --steps 200000 --set lr=1e-3
 Precedence is **defaults < `--config` < explicit flags < `--set`**. The fully-resolved
 config (including library versions and git SHA) is saved to each run's `run.json`.
 
+## Checkpoints & resume
+
+Every run writes a final checkpoint; pass `--checkpoint-interval` to also checkpoint
+periodically (a crash at step 90k then costs you minutes, not the whole run). A checkpoint
+captures the *full* training state — weights, optimizer momentum, target networks, counters
+and RNG — so resuming continues exactly where it left off rather than cold-starting:
+
+```bash
+rlens train --algo dqn --env CartPole-v1 --steps 500000 --checkpoint-interval 50000
+rlens train --resume runs/<run-name>                 # finish the original budget
+rlens train --resume runs/<run-name> --steps 1000000 # ...or extend it
+```
+
+Only the newest few checkpoints are kept (`checkpoint_keep`, default 3). `policy.pt` (weights
+only, for `rlens eval`) is written separately.
+
 ## Algorithms
 
 | Algo | Type        | Action space |

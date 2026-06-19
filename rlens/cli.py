@@ -30,6 +30,9 @@ def train(
     set_: list[str] = typer.Option(
         None, "--set", help="Override a hyperparameter, e.g. --set lr=3e-4 (repeatable)."
     ),
+    resume: Path | None = typer.Option(
+        None, help="Resume an existing run dir from its latest checkpoint."
+    ),
     runs_dir: Path = typer.Option(DEFAULT_RUNS_DIR, help="Where run dirs are written."),
     name: str | None = typer.Option(None, help="Run name (default: auto-generated)."),
     record_video: bool = typer.Option(False, help="Capture rollout frames for video."),
@@ -37,6 +40,9 @@ def train(
         None, help="Env steps between deterministic eval episodes (0 = off)."
     ),
     eval_episodes: int | None = typer.Option(None, help="Episodes per evaluation."),
+    checkpoint_interval: int | None = typer.Option(
+        None, help="Env steps between checkpoints (0 = only a final checkpoint)."
+    ),
 ) -> None:
     """Train a single policy and stream telemetry to a run dir.
 
@@ -46,7 +52,13 @@ def train(
 
     from rlens.experiment.config import TrainConfig
     from rlens.experiment.overrides import apply_overrides, parse_set
-    from rlens.experiment.run import run_config
+    from rlens.experiment.run import resume_training, run_config
+
+    # resume short-circuits config building: everything comes from the saved run
+    if resume is not None:
+        run_dir = resume_training(resume, total_steps=steps, device=device, progress=True)
+        typer.echo(f"Resumed run written to {run_dir}")
+        return
 
     # base: a config file if given, else dataclass defaults
     if config is not None:
@@ -67,6 +79,7 @@ def train(
         "num_envs": num_envs,
         "eval_interval_steps": eval_interval,
         "eval_episodes": eval_episodes,
+        "checkpoint_interval_steps": checkpoint_interval,
     }
     for key, value in flag_overrides.items():
         if value is not None:

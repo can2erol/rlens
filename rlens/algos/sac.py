@@ -72,6 +72,36 @@ class SAC(Algorithm):
     def modules(self) -> dict[str, nn.Module]:
         return {"actor": self.actor, "q1": self.q1, "q2": self.q2}
 
+    def checkpoint_state(self) -> dict[str, Any]:
+        s = super().checkpoint_state()
+        s["actor_opt"] = self.actor_opt.state_dict()
+        s["q_opt"] = self.q_opt.state_dict()
+        s["q1_target"] = self.q1_target.state_dict()
+        s["q2_target"] = self.q2_target.state_dict()
+        s["updates"] = self.updates
+        if self.cfg.autotune_alpha:
+            s["log_alpha"] = self.log_alpha.detach().cpu()
+            s["alpha_opt"] = self.alpha_opt.state_dict()
+        return s
+
+    def load_checkpoint_state(self, state: dict[str, Any]) -> None:
+        super().load_checkpoint_state(state)
+        if "actor_opt" in state:
+            self.actor_opt.load_state_dict(state["actor_opt"])
+        if "q_opt" in state:
+            self.q_opt.load_state_dict(state["q_opt"])
+        if "q1_target" in state:
+            self.q1_target.load_state_dict(state["q1_target"])
+        if "q2_target" in state:
+            self.q2_target.load_state_dict(state["q2_target"])
+        self.updates = state.get("updates", self.updates)
+        if self.cfg.autotune_alpha and "log_alpha" in state:
+            with torch.no_grad():
+                self.log_alpha.copy_(state["log_alpha"].to(self.device))
+            if "alpha_opt" in state:
+                self.alpha_opt.load_state_dict(state["alpha_opt"])
+            self.alpha = self.log_alpha.exp().item()
+
     # ---- interaction ------------------------------------------------------
     @torch.no_grad()
     def act(self, obs: torch.Tensor, deterministic: bool = False) -> tuple[np.ndarray, dict[str, Any]]:

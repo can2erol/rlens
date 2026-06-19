@@ -57,6 +57,23 @@ class DQN(Algorithm):
     def modules(self) -> dict[str, nn.Module]:
         return {"q": self.q}
 
+    def checkpoint_state(self) -> dict[str, Any]:
+        s = super().checkpoint_state()
+        s["opt"] = self.opt.state_dict()
+        s["q_target"] = self.q_target.state_dict()
+        s["t"] = self.t
+        s["updates"] = self.updates
+        return s
+
+    def load_checkpoint_state(self, state: dict[str, Any]) -> None:
+        super().load_checkpoint_state(state)
+        if "opt" in state:
+            self.opt.load_state_dict(state["opt"])
+        if "q_target" in state:
+            self.q_target.load_state_dict(state["q_target"])
+        self.t = state.get("t", self.t)
+        self.updates = state.get("updates", self.updates)
+
     # ---- exploration ------------------------------------------------------
     def epsilon(self) -> float:
         c = self.cfg

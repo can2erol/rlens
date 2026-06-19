@@ -25,6 +25,8 @@ class TrainConfig:
     log_interval_updates: int = 1
     eval_interval_steps: int = 0
     eval_episodes: int = 10
+    checkpoint_interval_steps: int = 0   # 0 = only a final checkpoint at the end
+    checkpoint_keep: int = 3
     record_video: bool = False
     video_interval_steps: int = 20_000
     algo_overrides: dict[str, Any] = field(default_factory=dict)

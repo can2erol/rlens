@@ -65,3 +65,14 @@ class Algorithm(ABC):
         for name, m in self.modules().items():
             if name in sd:
                 m.load_state_dict(sd[name])
+
+    # ---- full-state checkpointing (for resume) ---------------------------
+    def checkpoint_state(self) -> dict[str, Any]:
+        """Everything needed to *resume* training, not just deploy: weights plus
+        optimizer state, target networks and counters. Subclasses extend this; the base
+        captures the trainable modules (enough for an optimizer-free algo)."""
+        return {"modules": self.state_dict()}
+
+    def load_checkpoint_state(self, state: dict[str, Any]) -> None:
+        if "modules" in state:
+            self.load_state_dict(state["modules"])
