@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rlens"
+version = "0.1.0"
+description = "An observability-first reinforcement-learning training & benchmarking library."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "can.erol" }]
+dependencies = [
+    "torch>=2.2",
+    "numpy>=1.26",
+    "gymnasium[classic-control,box2d]>=0.29",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "imageio>=2.34",
+    "imageio-ffmpeg>=0.4.9",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[project.scripts]
+rlens = "rlens.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["rlens*"]
+
+[tool.setuptools.package-data]
+"rlens.dashboard" = ["static/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+# B008: Typer requires function calls (typer.Option/Argument) in argument defaults.
+ignore = ["E501", "B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

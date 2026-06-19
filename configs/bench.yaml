@@ -1,0 +1,18 @@
+# Example benchmark grid. Incompatible (algo, env) cells are skipped automatically:
+#   DQN -> discrete envs only;  SAC -> continuous envs only;  PPO -> both.
+total_steps: 50000
+device: cpu
+
+grid:
+  algo: [ppo, dqn, sac]
+  env: [CartPole-v1, Pendulum-v1]
+  seed: [0, 1]
+
+# optional per-algo hyperparameter overrides (merged into each algo's config)
+algo_overrides:
+  ppo:
+    lr: 0.0003
+  dqn:
+    lr: 0.00025
+  sac:
+    lr: 0.0003
