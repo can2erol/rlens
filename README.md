@@ -24,8 +24,29 @@ rlens train --algo ppo --env CartPole-v1
 # in another terminal, watch it learn
 rlens dashboard         # open http://127.0.0.1:8000
 
+# score a trained policy and record a rollout video
+rlens eval runs/<run-name> --episodes 10 --video
+
 # benchmark a grid of algo x env x seed
 rlens bench configs/bench.yaml
+```
+
+## Evaluation
+
+Training returns mix in exploration (epsilon-greedy, stochastic sampling), so they
+undersell a policy. `rlens eval` loads a run's `policy.pt` and scores it greedily:
+
+```bash
+rlens eval runs/ppo-CartPole-v1-s0-20260619  # mean ± std return over 10 episodes
+rlens eval runs/<name> --episodes 20 --video # also writes videos/eval.mp4
+rlens eval runs/<name> --stochastic          # sample actions instead of greedy
+```
+
+To track a clean eval curve *during* training (logged as `eval/return_mean`, distinct
+from the noisy `rollout/episodic_return`), pass `--eval-interval`:
+
+```bash
+rlens train --algo dqn --env CartPole-v1 --eval-interval 5000 --eval-episodes 10
 ```
 
 ## Algorithms

@@ -51,6 +51,8 @@ def train_single(
     num_envs: int | None = None,
     algo_overrides: dict[str, Any] | None = None,
     progress: bool = True,
+    eval_interval: int = 0,
+    eval_episodes: int = 10,
 ) -> Path:
     enable_mps_fallback()
     dev = pick_device(device)
@@ -69,6 +71,8 @@ def train_single(
         num_envs=num_envs,
         record_video=record_video,
         algo_overrides=algo_overrides or {},
+        eval_interval_steps=eval_interval,
+        eval_episodes=eval_episodes,
     )
 
     run_name = name or default_run_name(cfg)
@@ -98,6 +102,23 @@ def train_single(
                 rec.frame(step, episode=0, path=str(path.relative_to(run_dir)))
                 rec.flush()
 
+    eval_cb = None
+    if cfg.eval_interval_steps > 0:
+        from rlens.experiment.eval import evaluate
+
+        def eval_cb(step: int) -> None:
+            res = evaluate(
+                algo_obj, env_id, dev, episodes=cfg.eval_episodes, seed=seed + 10_000
+            )
+            rec.scalars(
+                {
+                    "eval/return_mean": res["return_mean"],
+                    "eval/return_std": res["return_std"],
+                    "eval/length_mean": res["length_mean"],
+                },
+                step=step,
+            )
+
     trainer = Trainer(
         algo_obj,
         env,
@@ -110,6 +131,8 @@ def train_single(
         progress=progress,
         video_cb=video_cb,
         video_interval=cfg.video_interval_steps if record_video else 0,
+        eval_cb=eval_cb,
+        eval_interval=cfg.eval_interval_steps,
     )
 
     status = "completed"

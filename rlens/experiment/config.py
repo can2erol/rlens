@@ -24,6 +24,7 @@ class TrainConfig:
     learning_starts: int = 1000       # off-policy: random steps before learning
     log_interval_updates: int = 1
     eval_interval_steps: int = 0
+    eval_episodes: int = 10
     record_video: bool = False
     video_interval_steps: int = 20_000
     algo_overrides: dict[str, Any] = field(default_factory=dict)
