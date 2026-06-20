@@ -151,6 +151,33 @@ def bench(
 
 
 @app.command()
+def report(
+    runs_dir: Path = typer.Argument(..., help="Benchmark runs dir to summarize."),
+    targets: Path | None = typer.Option(
+        None, help="YAML spec with a 'targets' map for pass/fail checking."
+    ),
+    episodes: int = typer.Option(20, help="Eval episodes per run."),
+    device: str = typer.Option("cpu", help="auto | mps | cuda | cpu."),
+    out: Path | None = typer.Option(None, help="Also write the Markdown table here."),
+) -> None:
+    """Evaluate every run in a dir and print a benchmark table (vs reference targets)."""
+    import yaml
+
+    from rlens.experiment.report import format_markdown, summarize_runs
+
+    target_map = None
+    if targets is not None:
+        target_map = (yaml.safe_load(Path(targets).read_text()) or {}).get("targets")
+
+    summary = summarize_runs(runs_dir, episodes=episodes, targets=target_map, device=device)
+    md = format_markdown(summary)
+    typer.echo(md)
+    if out is not None:
+        Path(out).write_text(md + "\n")
+        typer.echo(f"\nwrote {out}")
+
+
+@app.command()
 def dashboard(
     runs_dir: Path = typer.Option(DEFAULT_RUNS_DIR, help="Runs dir to serve."),
     host: str = typer.Option("127.0.0.1"),

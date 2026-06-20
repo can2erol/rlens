@@ -41,40 +41,83 @@ def _compatible(algo: str, env_id: str) -> bool:
     return True
 
 
-def run_benchmark(config_path: Path, runs_dir: Path = Path("runs")) -> list[Path]:
-    spec: dict[str, Any] = yaml.safe_load(Path(config_path).read_text())
-    grid = spec.get("grid", {})
-    algos = grid.get("algo", ["ppo"])
-    envs = grid.get("env", ["CartPole-v1"])
-    seeds = grid.get("seed", [0])
-    total_steps = spec.get("total_steps", 100_000)
-    device = spec.get("device", "auto")
+def _expand_cells(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build the list of (algo, env, seed, steps, overrides) cells from a spec.
+
+    Two spec styles are supported:
+    - ``grid``: a cartesian product of ``algo`` x ``env`` x ``seed`` (one global step budget).
+    - ``runs``: an explicit list of ``{algo, env, steps?, overrides?}`` entries, each fanned
+      out over the top-level ``seeds`` — better for benchmarks where envs need different
+      budgets and you want to avoid incompatible (algo, env) cells.
+    """
+    default_steps = spec.get("total_steps", 100_000)
     overrides_by_algo: dict[str, dict] = spec.get("algo_overrides", {})
 
-    cells = list(itertools.product(algos, envs, seeds))
-    print(f"benchmark: {len(cells)} cells ({len(algos)} algos x {len(envs)} envs x {len(seeds)} seeds)")
+    cells: list[dict[str, Any]] = []
+    if "runs" in spec:
+        seeds = spec.get("seeds", [0])
+        for entry in spec["runs"]:
+            for seed in seeds:
+                cells.append(
+                    {
+                        "algo": entry["algo"],
+                        "env": entry["env"],
+                        "seed": seed,
+                        "steps": entry.get("steps", default_steps),
+                        "overrides": {**overrides_by_algo.get(entry["algo"], {}),
+                                      **entry.get("overrides", {})},
+                    }
+                )
+    else:
+        grid = spec.get("grid", {})
+        for algo, env_id, seed in itertools.product(
+            grid.get("algo", ["ppo"]), grid.get("env", ["CartPole-v1"]), grid.get("seed", [0])
+        ):
+            cells.append(
+                {
+                    "algo": algo,
+                    "env": env_id,
+                    "seed": seed,
+                    "steps": default_steps,
+                    "overrides": overrides_by_algo.get(algo, {}),
+                }
+            )
+    return cells
+
+
+def run_benchmark(config_path: Path, runs_dir: Path = Path("runs")) -> list[Path]:
+    spec: dict[str, Any] = yaml.safe_load(Path(config_path).read_text())
+    device = spec.get("device", "auto")
+    eval_interval = spec.get("eval_interval", 0)
+    eval_episodes = spec.get("eval_episodes", 10)
+
+    cells = _expand_cells(spec)
+    print(f"benchmark: {len(cells)} runs -> {runs_dir}")
 
     results: list[Path] = []
     t0 = time.time()
-    for i, (algo, env_id, seed) in enumerate(cells, 1):
+    for i, cell in enumerate(cells, 1):
+        algo, env_id, seed = cell["algo"], cell["env"], cell["seed"]
         if not _compatible(algo, env_id):
             print(f"[{i}/{len(cells)}] skip {algo} on {env_id} (action-space mismatch)")
             continue
         name = f"{algo}-{env_id}-s{seed}"
-        print(f"[{i}/{len(cells)}] {name} ...", flush=True)
+        print(f"[{i}/{len(cells)}] {name} ({cell['steps']:,} steps) ...", flush=True)
         run = train_single(
             algo=algo,
             env_id=env_id,
-            total_steps=total_steps,
+            total_steps=cell["steps"],
             seed=seed,
             device=device,
             runs_dir=runs_dir,
             name=name,
-            algo_overrides=overrides_by_algo.get(algo, {}),
+            algo_overrides=cell["overrides"],
             progress=False,
+            eval_interval=eval_interval,
+            eval_episodes=eval_episodes,
         )
         results.append(run)
 
     print(f"\nbenchmark done: {len(results)} runs in {time.time() - t0:.1f}s -> {runs_dir}")
-    print("view with:  rlens dashboard")
+    print(f"report with:  rlens report {runs_dir} --targets {config_path}")
     return results
