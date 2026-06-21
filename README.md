@@ -21,9 +21,8 @@ while you train.*
 
 ## Why rlens
 
-- **See the policy, not just the loss.** A zero-setup dashboard with multi-run reward curves,
-  gradient norms, action histograms, and inline rollout video — no W&B account, no TensorBoard
-  process to babysit.
+- **See the policy, not just the loss.** A zero-setup local dashboard — no W&B account, no
+  TensorBoard process to babysit (details below).
 - **Benchmark & compare.** One command runs an (algorithm × env × seed) grid; a sortable
   comparison table and a config-diff view turn a sweep into a single glance.
 - **Reproduced & trustworthy.** PPO/DQN/SAC match reference returns on standard envs
@@ -35,13 +34,12 @@ while you train.*
 
 ## Who it's for
 
-rlens is built for **learning RL, debugging training runs, and benchmarking ideas on one
-machine** — students, educators, and solo researchers who want to *see* why an agent is (or
-isn't) learning without standing up a tracking service. It stays small, local, and readable
-by design.
+**Students, educators, and solo researchers** working on a single machine — anyone who wants
+to see and compare what their agents are doing without standing up a tracking service. It
+stays small, local, and readable by design.
 
-It is **not** aimed at distributed / multi-GPU training, large algorithm zoos, or hosted
-experiment tracking — for those, reach for RLlib, Stable-Baselines3, or Weights & Biases.
+It is **not** built for distributed / multi-GPU training, large algorithm zoos, or hosted
+experiment tracking — reach for RLlib, Stable-Baselines3, or Weights & Biases there.
 
 ## Install
 
@@ -93,8 +91,8 @@ dashboard is fully decoupled from training and adds no overhead to the hot loop.
 
 ## Benchmarks
 
-rlens reproduces commonly reported reference returns. Full methodology, specs and per-seed
-numbers are in [`benchmarks/`](benchmarks/); headline results (best policy, 3 seeds, CPU):
+rlens reproduces commonly reported reference returns — headline results (best policy, 3 seeds,
+CPU):
 
 | algorithm | env | eval return | reference | status |
 |-----------|-----|-------------|-----------|:---:|
@@ -106,17 +104,8 @@ numbers are in [`benchmarks/`](benchmarks/); headline results (best policy, 3 se
 | PPO | LunarLander-v3 | 229.9 ± 9.4 | ≥ 200 (solved) | ✅ |
 | DQN | LunarLander-v3 | 251.5 ± 9.7 | ≥ 200 (solved) | ✅ |
 
-Reproduce:
-
-```bash
-# classic control
-rlens bench benchmarks/classic_control.yaml --runs-dir runs_bench
-rlens report runs_bench --targets benchmarks/classic_control.yaml --best
-
-# LunarLander (needs the box2d extra)
-rlens bench benchmarks/lunarlander.yaml --runs-dir runs_lander
-rlens report runs_lander --targets benchmarks/lunarlander.yaml --best
-```
+Full methodology, per-seed numbers, and one-command reproduction are in
+[`benchmarks/`](benchmarks/).
 
 ## Training & configuration
 
