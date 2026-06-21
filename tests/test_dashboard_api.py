@@ -36,4 +36,36 @@ def test_dashboard_endpoints(tmp_path):
     vids = client.get("/api/runs/r0/videos").json()
     assert vids["videos"] == []
 
+    # scalars now carry wall_time for the time x-axis
+    assert len(sc["times"]) == len(sc["values"])
+
     assert client.get("/").status_code == 200
+
+
+def test_meta_and_summary_endpoints(tmp_path):
+    name = "r1"
+    with Recorder(tmp_path / name) as rec:
+        rec.meta({
+            "name": name, "status": "completed",
+            "config": {"algo": "ppo", "env_id": "CartPole-v1", "seed": 2, "lr": 0.0003},
+            "final_step": 5000, "best_return": 480.0, "best_step": 4000,
+        })
+        for step in range(5):
+            rec.scalar("rollout/episodic_return", float(step * 100), step=step)  # max 400
+            rec.scalar("eval/return_mean", float(step * 90), step=step)           # max 360
+            rec.scalar("perf/steps_per_sec", 1234.0, step=step)
+        rec.flush()
+
+    client = TestClient(create_app(tmp_path))
+
+    meta = client.get(f"/api/runs/{name}/meta").json()
+    assert meta["config"]["lr"] == 0.0003
+    assert meta["best_return"] == 480.0
+
+    s = client.get(f"/api/runs/{name}/summary").json()
+    assert s["algo"] == "ppo" and s["env"] == "CartPole-v1" and s["seed"] == 2
+    assert s["status"] == "completed" and s["steps"] == 5000
+    assert s["return_best"] == 400.0   # max of episodic_return
+    assert s["return_last"] == 400.0   # last logged
+    assert s["eval_best"] == 360.0
+    assert s["fps"] == 1234.0

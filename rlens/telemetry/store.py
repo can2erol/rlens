@@ -160,6 +160,23 @@ class TelemetryStore:
         row = self._conn.execute("SELECT COALESCE(MAX(id), 0) AS m FROM scalars").fetchone()
         return int(row["m"])
 
+    def scalar_summary(self, tag: str) -> dict[str, Any]:
+        """Count, last, max and min of a scalar tag — for the run comparison table."""
+        agg = self._conn.execute(
+            "SELECT COUNT(*) AS n, MAX(value) AS mx, MIN(value) AS mn FROM scalars WHERE tag=?",
+            (tag,),
+        ).fetchone()
+        last = self._conn.execute(
+            "SELECT value FROM scalars WHERE tag=? ORDER BY id DESC LIMIT 1", (tag,)
+        ).fetchone()
+        n = int(agg["n"])
+        return {
+            "count": n,
+            "best": agg["mx"] if n else None,
+            "min": agg["mn"] if n else None,
+            "last": last["value"] if last else None,
+        }
+
     def close(self) -> None:
         self._conn.close()
 

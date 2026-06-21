@@ -1,0 +1,30 @@
+# Classic-control reproducibility benchmark.
+#
+#   rlens bench benchmarks/classic_control.yaml --runs-dir runs_bench
+#   rlens report runs_bench --targets benchmarks/classic_control.yaml --out benchmarks/results.md
+#
+# CPU-only, no MuJoCo/Box2D — runs end-to-end on a laptop. References are the commonly
+# reported "good policy" numbers (CartPole solved >= 475; Acrobot good ~ -100; Pendulum
+# SAC ~ -200). Pass means mean eval return across seeds clears the reference.
+
+device: cpu
+seeds: [0, 1, 2]
+eval_interval: 25000
+eval_episodes: 10
+
+runs:
+  - { algo: ppo, env: CartPole-v1, steps: 250000 }
+  - { algo: dqn, env: CartPole-v1, steps: 200000 }
+  - { algo: ppo, env: Acrobot-v1,  steps: 300000 }
+  - { algo: dqn, env: Acrobot-v1,  steps: 200000 }
+  - { algo: sac, env: Pendulum-v1, steps: 50000 }
+
+targets:
+  ppo:
+    CartPole-v1: 475
+    Acrobot-v1: -100
+  dqn:
+    CartPole-v1: 475
+    Acrobot-v1: -100
+  sac:
+    Pendulum-v1: -250

@@ -136,6 +136,7 @@ def run_config(
                 rec.flush()
 
     eval_cb = None
+    best_eval = {"return": float("-inf"), "step": None}
     if cfg.eval_interval_steps > 0:
         from rlens.experiment.eval import evaluate
 
@@ -151,6 +152,12 @@ def run_config(
                 },
                 step=step,
             )
+            # keep the best-performing policy, not just the last — RL training often
+            # oscillates after it first solves a task.
+            if res["return_mean"] > best_eval["return"]:
+                best_eval["return"] = res["return_mean"]
+                best_eval["step"] = step
+                torch.save(algo_obj.state_dict(), run_dir / "best_policy.pt")
 
     def checkpoint_cb(step: int) -> None:
         save_checkpoint(run_dir, algo_obj, step, cfg.__dict__, keep_last=cfg.checkpoint_keep)
@@ -192,6 +199,8 @@ def run_config(
                 "config": cfg.__dict__,
                 "versions": version_snapshot(),
                 "final_step": trainer.global_step,
+                "best_return": None if best_eval["step"] is None else best_eval["return"],
+                "best_step": best_eval["step"],
                 "ended_at": time.time(),
             }
         )

@@ -78,10 +78,12 @@ def evaluate(
 
 
 def load_trained_algo(
-    run_dir: Path, device: str | torch.device = "auto"
+    run_dir: Path, device: str | torch.device = "auto", prefer_best: bool = False
 ) -> tuple[Algorithm, str, dict[str, Any]]:
-    """Rebuild the algorithm from a run dir's ``run.json`` and load its ``policy.pt``.
+    """Rebuild the algorithm from a run dir's ``run.json`` and load its weights.
 
+    Loads ``policy.pt`` (the final policy) by default; with ``prefer_best=True`` loads
+    ``best_policy.pt`` (highest-eval policy) when it exists, falling back to the final one.
     Returns ``(algo, env_id, meta)``. The temporary EnvManager built to recover the
     observation/action dimensions is closed before returning; callers evaluate against a
     fresh env.
@@ -99,8 +101,10 @@ def load_trained_algo(
     overrides = config.get("algo_overrides", {})
 
     policy_path = run_dir / "policy.pt"
+    if prefer_best and (run_dir / "best_policy.pt").exists():
+        policy_path = run_dir / "best_policy.pt"
     if not policy_path.exists():
-        raise FileNotFoundError(f"No policy.pt in {run_dir}")
+        raise FileNotFoundError(f"No {policy_path.name} in {run_dir}")
 
     enable_mps_fallback()
     dev = device if isinstance(device, torch.device) else pick_device(device)

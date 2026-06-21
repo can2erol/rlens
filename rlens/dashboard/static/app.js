@@ -7,11 +7,17 @@ const DEFAULT_B = "grad_norm/actor/global";
 const state = {
   runs: [],            // [{id, status, algo, env, seed}]
   selected: new Set(), // run ids overlaid on charts
-  focus: null,         // run id used for the histogram
+  focus: null,         // run id used for the histogram / config panel
   metricA: DEFAULT_A,
   metricB: DEFAULT_B,
   charts: {},          // id -> uPlot instance
   colorOf: {},         // run id -> color
+  smoothing: 0.6,      // EMA weight on history (0 = raw)
+  xaxis: "step",       // "step" | "time"
+  configDiff: false,   // config panel: diff selected vs focus only
+  compareRows: [],     // cached run summaries for the table
+  sortKey: "id",
+  sortDir: 1,
 };
 
 async function api(path) {
@@ -27,10 +33,18 @@ function colorFor(runId) {
   return state.colorOf[runId];
 }
 
+const shortId = (id) => id.split("-").slice(0, 2).join("-");
+const fmtNum = (v) => (v == null ? "—" : (Math.abs(v) >= 1000 ? Math.round(v).toString() : v.toFixed(1)));
+const fmtInt = (v) => (v == null ? "—" : Math.round(v).toLocaleString());
+function fmtVal(v) {
+  if (v == null || v === "") return "—";
+  if (typeof v === "number") return Number.isInteger(v) ? v.toString() : v.toFixed(4).replace(/0+$/, "");
+  return String(v);
+}
+
 // ---- run sidebar ----------------------------------------------------------
 async function loadRuns() {
   state.runs = await api("/api/runs");
-  // auto-select everything the first time
   if (state.selected.size === 0 && state.runs.length) {
     state.runs.forEach((r) => state.selected.add(r.id));
     state.focus = state.runs[state.runs.length - 1].id;
@@ -68,6 +82,7 @@ function renderRuns() {
       renderRuns();
       drawHist();
       drawVideo();
+      drawConfig();
     });
     el.appendChild(row);
   }
@@ -96,15 +111,28 @@ function fillSelect(elId, tags, current) {
 }
 
 // ---- chart drawing --------------------------------------------------------
-// Merge multiple runs' (steps,values) into a shared x axis with nulls for gaps.
-function mergeSeries(seriesList) {
+// Exponential moving average (TensorBoard-style), applied per run before merge.
+function ema(values, alpha) {
+  if (!alpha) return values;
+  const out = [];
+  let prev = null;
+  for (const v of values) {
+    if (v == null) { out.push(null); continue; }
+    prev = prev == null ? v : alpha * prev + (1 - alpha) * v;
+    out.push(prev);
+  }
+  return out;
+}
+
+// Merge runs with independent x arrays onto a shared, sorted x axis (nulls for gaps).
+function mergeSeriesXY(seriesList) {
   const xs = new Set();
-  seriesList.forEach((s) => s.steps.forEach((x) => xs.add(x)));
+  seriesList.forEach((s) => s.x.forEach((v) => xs.add(v)));
   const x = [...xs].sort((a, b) => a - b);
   const index = new Map(x.map((v, i) => [v, i]));
   const cols = seriesList.map((s) => {
     const col = new Array(x.length).fill(null);
-    s.steps.forEach((step, i) => (col[index.get(step)] = s.values[i]));
+    s.x.forEach((xv, i) => (col[index.get(xv)] = s.y[i]));
     return col;
   });
   return [x, ...cols];
@@ -116,7 +144,7 @@ async function drawChart(divId, chartKey, tag) {
   for (const id of runIds) {
     try {
       const d = await api(`/api/runs/${id}/scalars?tag=${encodeURIComponent(tag)}`);
-      if (d.steps.length) fetched.push({ id, steps: d.steps, values: d.values });
+      if (d.steps.length) fetched.push({ id, steps: d.steps, values: d.values, times: d.times || [] });
     } catch (_) {}
   }
   const div = document.getElementById(divId);
@@ -126,10 +154,15 @@ async function drawChart(divId, chartKey, tag) {
     return;
   }
   div.innerHTML = "";
-  const data = mergeSeries(fetched);
+  const useTime = state.xaxis === "time";
+  const prepared = fetched.map((s) => {
+    const x = useTime && s.times.length ? s.times.map((t) => (t - s.times[0]) / 60) : s.steps;
+    return { id: s.id, x, y: ema(s.values, state.smoothing) };
+  });
+  const data = mergeSeriesXY(prepared);
   const series = [{}].concat(
-    fetched.map((s) => ({
-      label: s.id.split("-").slice(0, 2).join("-"),
+    prepared.map((s) => ({
+      label: shortId(s.id),
       stroke: colorFor(s.id),
       width: 1.5,
       spanGaps: true,
@@ -139,7 +172,7 @@ async function drawChart(divId, chartKey, tag) {
   const opts = {
     width: div.clientWidth || 600,
     height: 260,
-    title: tag,
+    title: tag + (useTime ? "  (x: minutes)" : ""),
     scales: { x: { time: false } },
     axes: [
       { stroke: "#8b94a7", grid: { stroke: "#262b36" } },
@@ -155,7 +188,7 @@ async function drawHist() {
   const div = document.getElementById("chartHist");
   const id = state.focus;
   document.getElementById("histTitle").textContent =
-    "action distribution" + (id ? ` · ${id.split("-").slice(0, 2).join("-")}` : "");
+    "action distribution" + (id ? ` · ${shortId(id)}` : "");
   if (!id) { div.innerHTML = '<div class="empty">select a run</div>'; return; }
   let h;
   try { h = await api(`/api/runs/${id}/histogram?tag=actions`); }
@@ -181,6 +214,112 @@ async function drawHist() {
   state.charts.hist = new uPlot(opts, [centers, h.counts], div);
 }
 
+// ---- run comparison table -------------------------------------------------
+async function drawCompare() {
+  const ids = [...state.selected];
+  const rows = [];
+  for (const id of ids) {
+    try { rows.push(await api(`/api/runs/${id}/summary`)); } catch (_) {}
+  }
+  state.compareRows = rows;
+  renderCompare();
+}
+
+function renderCompare() {
+  const div = document.getElementById("compare");
+  const rows = [...state.compareRows];
+  if (!rows.length) { div.innerHTML = '<div class="empty">no runs selected</div>'; return; }
+  const cols = [
+    { k: "id", label: "run", fmt: (r) => shortId(r.id) },
+    { k: "algo", label: "algo" },
+    { k: "env", label: "env" },
+    { k: "seed", label: "seed" },
+    { k: "status", label: "status" },
+    { k: "steps", label: "steps", fmt: (r) => fmtInt(r.steps) },
+    { k: "return_best", label: "return (best)", fmt: (r) => fmtNum(r.return_best) },
+    { k: "eval_best", label: "eval (best)", fmt: (r) => fmtNum(r.eval_best) },
+    { k: "fps", label: "fps", fmt: (r) => fmtInt(r.fps) },
+  ];
+  rows.sort((a, b) => {
+    let x = a[state.sortKey], y = b[state.sortKey];
+    if (x == null) x = -Infinity;
+    if (y == null) y = -Infinity;
+    if (typeof x === "string" || typeof y === "string") return state.sortDir * String(x).localeCompare(String(y));
+    return state.sortDir * ((x > y) - (x < y));
+  });
+  const thead = cols.map((c) => {
+    const arrow = state.sortKey === c.k ? (state.sortDir > 0 ? " ▲" : " ▼") : "";
+    return `<th data-k="${c.k}">${c.label}${arrow}</th>`;
+  }).join("");
+  const body = rows.map((r) => {
+    const tds = cols.map((c, i) => {
+      const sw = i === 0 ? `<span class="swatch" style="background:${colorFor(r.id)}"></span> ` : "";
+      const v = c.fmt ? c.fmt(r) : (r[c.k] ?? "—");
+      return `<td>${sw}${v}</td>`;
+    }).join("");
+    return `<tr>${tds}</tr>`;
+  }).join("");
+  div.innerHTML = `<table class="cmp"><thead><tr>${thead}</tr></thead><tbody>${body}</tbody></table>`;
+  div.querySelectorAll("th").forEach((th) =>
+    th.addEventListener("click", () => {
+      const k = th.dataset.k;
+      if (state.sortKey === k) state.sortDir *= -1;
+      else { state.sortKey = k; state.sortDir = 1; }
+      renderCompare();
+    })
+  );
+}
+
+// ---- config panel ---------------------------------------------------------
+function flatten(obj, prefix = "") {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === "object" && !Array.isArray(v)) Object.assign(out, flatten(v, key));
+    else out[key] = Array.isArray(v) ? `[${v.join(", ")}]` : v;
+  }
+  return out;
+}
+
+async function drawConfig() {
+  const div = document.getElementById("config");
+  if (state.configDiff) return drawConfigDiff(div);
+  const id = state.focus;
+  if (!id) { div.innerHTML = '<div class="empty">select a run</div>'; return; }
+  let meta;
+  try { meta = await api(`/api/runs/${id}/meta`); }
+  catch (_) { div.innerHTML = '<div class="empty">no config</div>'; return; }
+  const head = {
+    status: meta.status, final_step: meta.final_step,
+    best_return: meta.best_return, best_step: meta.best_step,
+  };
+  const cfg = flatten(meta.config || {});
+  const rows = Object.entries({ ...head, ...cfg })
+    .map(([k, v]) => `<tr><td class="k">${k}</td><td>${fmtVal(v)}</td></tr>`)
+    .join("");
+  div.innerHTML = `<table class="cfg"><tbody>${rows}</tbody></table>`;
+}
+
+async function drawConfigDiff(div) {
+  const ids = [...state.selected];
+  if (ids.length < 2) { div.innerHTML = '<div class="empty">select 2+ runs to diff</div>'; return; }
+  const metas = {};
+  for (const id of ids) {
+    try { metas[id] = flatten((await api(`/api/runs/${id}/meta`)).config || {}); } catch (_) {}
+  }
+  const present = ids.filter((id) => metas[id]);
+  const keys = [...new Set(present.flatMap((id) => Object.keys(metas[id])))].sort();
+  const head = `<th>key</th>` + present.map((id) =>
+    `<th><span class="swatch" style="background:${colorFor(id)}"></span> ${shortId(id)}</th>`).join("");
+  const body = keys.map((k) => {
+    const vals = present.map((id) => metas[id][k]);
+    const differ = new Set(vals.map((v) => JSON.stringify(v ?? null))).size > 1;
+    const tds = vals.map((v) => `<td>${fmtVal(v)}</td>`).join("");
+    return `<tr class="${differ ? "diff" : ""}"><td class="k">${k}</td>${tds}</tr>`;
+  }).join("");
+  div.innerHTML = `<table class="cfg"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
 async function drawVideo() {
   const id = state.focus;
   const sel = document.getElementById("videoStep");
@@ -199,7 +338,6 @@ async function drawVideo() {
   sel.innerHTML = vids
     .map((v) => `<option value="${v.url}">step ${v.step ?? v.name}</option>`)
     .join("");
-  // keep selection if still present, else jump to latest
   const urls = vids.map((v) => v.url);
   const chosen = urls.includes(prev) ? prev : urls[urls.length - 1];
   sel.value = chosen;
@@ -220,6 +358,8 @@ async function redraw() {
   await drawChart("chartA", "A", state.metricA);
   await drawChart("chartB", "B", state.metricB);
   await drawHist();
+  await drawCompare();
+  await drawConfig();
   await drawVideo();
 }
 
@@ -228,6 +368,20 @@ document.getElementById("metricA").addEventListener("change", (e) => {
 });
 document.getElementById("metricB").addEventListener("change", (e) => {
   state.metricB = e.target.value; drawChart("chartB", "B", state.metricB);
+});
+document.getElementById("smooth").addEventListener("input", (e) => {
+  state.smoothing = Number(e.target.value) / 100;
+  drawChart("chartA", "A", state.metricA);
+  drawChart("chartB", "B", state.metricB);
+});
+document.getElementById("xaxis").addEventListener("change", (e) => {
+  state.xaxis = e.target.value;
+  drawChart("chartA", "A", state.metricA);
+  drawChart("chartB", "B", state.metricB);
+});
+document.getElementById("diffToggle").addEventListener("change", (e) => {
+  state.configDiff = e.target.checked;
+  drawConfig();
 });
 
 async function tick() {

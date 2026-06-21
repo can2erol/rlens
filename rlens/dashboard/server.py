@@ -72,10 +72,42 @@ def create_app(runs_dir: Path) -> FastAPI:
                 "tag": tag,
                 "steps": [r["step"] for r in rows],
                 "values": [r["value"] for r in rows],
+                "times": [r["wall_time"] for r in rows],
                 "last_id": rows[-1]["id"] if rows else after_id,
             }
         finally:
             s.close()
+
+    @app.get("/api/runs/{run_id}/meta")
+    def api_meta(run_id: str) -> Any:
+        return read_meta(runs_dir / run_id)
+
+    @app.get("/api/runs/{run_id}/summary")
+    def api_summary(run_id: str) -> Any:
+        """Headline metrics for the comparison table: best/last return, eval, FPS."""
+        meta = read_meta(runs_dir / run_id)
+        cfg = meta.get("config", {})
+        s = store_for(run_id)
+        try:
+            ret = s.scalar_summary("rollout/episodic_return")
+            ev = s.scalar_summary("eval/return_mean")
+            fps = s.scalar_summary("perf/steps_per_sec")
+        finally:
+            s.close()
+        return {
+            "id": run_id,
+            "algo": cfg.get("algo"),
+            "env": cfg.get("env_id"),
+            "seed": cfg.get("seed"),
+            "status": meta.get("status", "unknown"),
+            "steps": meta.get("final_step"),
+            "return_last": ret["last"],
+            "return_best": ret["best"],
+            "eval_last": ev["last"],
+            "eval_best": ev["best"],
+            "best_return": meta.get("best_return"),
+            "fps": fps["last"],
+        }
 
     @app.get("/api/runs/{run_id}/histogram")
     def api_histogram(run_id: str, tag: str) -> Any:

@@ -44,6 +44,22 @@ rlens eval runs/<run-name> --episodes 10 --video
 rlens bench configs/bench.yaml
 ```
 
+## Dashboard
+
+`rlens dashboard` serves a live, no-build web UI (open http://127.0.0.1:8000) that tails the
+run directories — attach to a live run, a finished one, or a whole benchmark grid:
+
+- **Reward curves** for any logged metric, **overlaying multiple runs** with EMA **smoothing**
+  and a **step ↔ wall-time** x-axis toggle.
+- A **run-comparison table** (sortable: best/last return, eval, steps, FPS, status) so a grid
+  is one glance, not twelve tabs.
+- A **config panel** showing exactly which hyperparameters produced a curve — with a
+  **diff mode** that highlights what changed across the selected runs.
+- Auto-captured **gradient norms**, **action distributions**, and inline **rollout video**.
+
+It reads the same SQLite stores the trainer writes (WAL mode → safe concurrent reads), so the
+dashboard is fully decoupled from training.
+
 ## Evaluation
 
 Training returns mix in exploration (epsilon-greedy, stochastic sampling), so they
@@ -53,6 +69,7 @@ undersell a policy. `rlens eval` loads a run's `policy.pt` and scores it greedil
 rlens eval runs/ppo-CartPole-v1-s0-20260619  # mean ± std return over 10 episodes
 rlens eval runs/<name> --episodes 20 --video # also writes videos/eval.mp4
 rlens eval runs/<name> --stochastic          # sample actions instead of greedy
+rlens eval runs/<name> --best                # score the best-eval checkpoint
 ```
 
 To track a clean eval curve *during* training (logged as `eval/return_mean`, distinct
@@ -61,6 +78,10 @@ from the noisy `rollout/episodic_return`), pass `--eval-interval`:
 ```bash
 rlens train --algo dqn --env CartPole-v1 --eval-interval 5000 --eval-episodes 10
 ```
+
+With eval enabled, training also saves `best_policy.pt` — the highest-scoring policy, not
+just the last (RL often drifts after it first solves a task). Score it with `rlens eval
+--best`, and see `benchmarks/` for reproduced reference results.
 
 ## Configuration
 

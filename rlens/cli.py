@@ -106,12 +106,15 @@ def eval_run(
     stochastic: bool = typer.Option(
         False, "--stochastic", help="Sample actions instead of acting greedily."
     ),
+    best: bool = typer.Option(
+        False, "--best", help="Score the best-eval checkpoint instead of the final policy."
+    ),
     video: bool = typer.Option(False, help="Also record one episode to <run>/videos/."),
 ) -> None:
     """Load a trained policy and score it over several episodes (optionally record a video)."""
     from rlens.experiment.eval import evaluate, load_trained_algo
 
-    algo_obj, env_id, _ = load_trained_algo(run, device=device)
+    algo_obj, env_id, _ = load_trained_algo(run, device=device, prefer_best=best)
     res = evaluate(
         algo_obj,
         env_id,
@@ -158,6 +161,9 @@ def report(
     ),
     episodes: int = typer.Option(20, help="Eval episodes per run."),
     device: str = typer.Option("cpu", help="auto | mps | cuda | cpu."),
+    best: bool = typer.Option(
+        False, "--best", help="Score best-eval checkpoints instead of final policies."
+    ),
     out: Path | None = typer.Option(None, help="Also write the Markdown table here."),
 ) -> None:
     """Evaluate every run in a dir and print a benchmark table (vs reference targets)."""
@@ -169,7 +175,9 @@ def report(
     if targets is not None:
         target_map = (yaml.safe_load(Path(targets).read_text()) or {}).get("targets")
 
-    summary = summarize_runs(runs_dir, episodes=episodes, targets=target_map, device=device)
+    summary = summarize_runs(
+        runs_dir, episodes=episodes, targets=target_map, device=device, prefer_best=best
+    )
     md = format_markdown(summary)
     typer.echo(md)
     if out is not None:

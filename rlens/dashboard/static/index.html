@@ -36,6 +36,18 @@
   .card h3 { margin:0 0 8px; font-size:12px; color:var(--muted); font-weight:600; }
   .u-legend { font-size:11px; }
   .empty { color:var(--muted); padding:40px; text-align:center; }
+  .toolbar .spacer { flex:1; }
+  .toolbar label { color:var(--muted); }
+  .toolbar input[type=range] { width:120px; accent-color:var(--accent); vertical-align:middle; }
+  table.cmp, table.cfg { border-collapse:collapse; width:100%; font-size:12px; }
+  table.cmp th, table.cmp td, table.cfg th, table.cfg td {
+    text-align:left; padding:5px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  table.cmp th { color:var(--muted); cursor:pointer; user-select:none; font-weight:600; }
+  table.cmp th:hover { color:var(--fg); }
+  table.cmp td:nth-child(n+4), table.cmp th:nth-child(n+4) { text-align:right; }
+  table.cfg td.k { color:var(--muted); width:230px; }
+  table.cfg tr.diff td { background:#2a2030; color:#f0b37e; }
+  .cfg-wrap { max-height:340px; overflow:auto; }
 </style>
 </head>
 <body>
@@ -53,6 +65,14 @@
     <div class="toolbar">
       <label>metric</label>
       <select id="metricA"></select>
+      <span class="spacer"></span>
+      <label>smoothing</label>
+      <input type="range" id="smooth" min="0" max="95" value="60" />
+      <label>x-axis</label>
+      <select id="xaxis">
+        <option value="step">step</option>
+        <option value="time">time (min)</option>
+      </select>
     </div>
     <div class="card"><div id="chartA"></div></div>
     <div class="grid2">
@@ -64,6 +84,15 @@
         <h3 id="histTitle">action distribution</h3>
         <div id="chartHist"></div>
       </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>compare runs</h3>
+      <div id="compare"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>config <label style="font-weight:400;color:var(--muted);margin-left:6px">
+        <input type="checkbox" id="diffToggle" /> diff selected</label></h3>
+      <div id="config" class="cfg-wrap"></div>
     </div>
     <div class="card" style="margin-top:14px">
       <h3 id="videoTitle">rollout · <select id="videoStep"></select></h3>
