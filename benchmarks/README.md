@@ -38,3 +38,18 @@ Measured 2026-06; CPU; 3 seeds; 20 deterministic eval episodes per run via `rlen
 
 Numbers are produced by `rlens report` (20 eval episodes/run). Training budgets and seeds
 are in the spec. See the live curves and per-run rollout videos in `rlens dashboard`.
+
+## LunarLander-v3 (Box2D — a harder env)
+
+Spec: [`lunarlander.yaml`](lunarlander.yaml) (needs `pip install -e ".[box2d]"`).
+"Solved" = mean return ≥ 200. Full table: [`lunarlander_results.md`](lunarlander_results.md).
+
+| algo | env | seeds | eval return (best) | reference | status |
+|------|-----|-------|--------------------|-----------|--------|
+| dqn | LunarLander-v3 | 3 | 251.5 ± 9.7 | ≥ 200 | ✅ solved |
+| ppo | LunarLander-v3 | 3 | 50.5 ± 68.7 | ≥ 200 | 🚧 learning |
+
+**DQN solves LunarLander** — final 224 ± 47, best 251.5 ± 9.7 — and the whole 3-seed run
+took ~10 min on CPU using the off-policy throughput knobs (single env, replay ratio ¼).
+**PPO is still climbing** at 1M steps (seeds reach +130–160 then oscillate); it needs
+learning-rate annealing + a larger budget to clear the bar — tracked as a follow-up.

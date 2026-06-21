@@ -16,7 +16,8 @@ from typing import Any
 
 import yaml
 
-from rlens.experiment.run import train_single
+from rlens.experiment.config import TrainConfig
+from rlens.experiment.run import run_config
 
 # action-space compatibility: which algos need discrete vs continuous
 _DISCRETE_ONLY = {"dqn"}
@@ -41,14 +42,19 @@ def _compatible(algo: str, env_id: str) -> bool:
     return True
 
 
+# run-level (TrainConfig) fields a `runs:` entry may set, beyond algo hyperparameters
+_RUN_LEVEL = ("num_envs", "update_every", "gradient_steps", "learning_starts")
+
+
 def _expand_cells(spec: dict[str, Any]) -> list[dict[str, Any]]:
-    """Build the list of (algo, env, seed, steps, overrides) cells from a spec.
+    """Build the list of run cells from a spec.
 
     Two spec styles are supported:
     - ``grid``: a cartesian product of ``algo`` x ``env`` x ``seed`` (one global step budget).
-    - ``runs``: an explicit list of ``{algo, env, steps?, overrides?}`` entries, each fanned
-      out over the top-level ``seeds`` — better for benchmarks where envs need different
-      budgets and you want to avoid incompatible (algo, env) cells.
+    - ``runs``: an explicit list of ``{algo, env, steps?, overrides?, ...}`` entries, each
+      fanned out over the top-level ``seeds``. Entries may also set run-level knobs
+      (``num_envs``, ``update_every``, ``gradient_steps``, ``learning_starts``) — needed for
+      harder envs where off-policy algos want a tuned replay ratio / warmup.
     """
     default_steps = spec.get("total_steps", 100_000)
     overrides_by_algo: dict[str, dict] = spec.get("algo_overrides", {})
@@ -57,6 +63,7 @@ def _expand_cells(spec: dict[str, Any]) -> list[dict[str, Any]]:
     if "runs" in spec:
         seeds = spec.get("seeds", [0])
         for entry in spec["runs"]:
+            train = {k: entry[k] for k in _RUN_LEVEL if k in entry}
             for seed in seeds:
                 cells.append(
                     {
@@ -66,6 +73,7 @@ def _expand_cells(spec: dict[str, Any]) -> list[dict[str, Any]]:
                         "steps": entry.get("steps", default_steps),
                         "overrides": {**overrides_by_algo.get(entry["algo"], {}),
                                       **entry.get("overrides", {})},
+                        "train": train,
                     }
                 )
     else:
@@ -80,6 +88,7 @@ def _expand_cells(spec: dict[str, Any]) -> list[dict[str, Any]]:
                     "seed": seed,
                     "steps": default_steps,
                     "overrides": overrides_by_algo.get(algo, {}),
+                    "train": {},
                 }
             )
     return cells
@@ -103,19 +112,18 @@ def run_benchmark(config_path: Path, runs_dir: Path = Path("runs")) -> list[Path
             continue
         name = f"{algo}-{env_id}-s{seed}"
         print(f"[{i}/{len(cells)}] {name} ({cell['steps']:,} steps) ...", flush=True)
-        run = train_single(
+        cfg = TrainConfig(
             algo=algo,
             env_id=env_id,
             total_steps=cell["steps"],
             seed=seed,
             device=device,
-            runs_dir=runs_dir,
-            name=name,
-            algo_overrides=cell["overrides"],
-            progress=False,
-            eval_interval=eval_interval,
+            eval_interval_steps=eval_interval,
             eval_episodes=eval_episodes,
+            algo_overrides=cell["overrides"],
+            **cell["train"],
         )
+        run = run_config(cfg, runs_dir=runs_dir, name=name, progress=False)
         results.append(run)
 
     print(f"\nbenchmark done: {len(results)} runs in {time.time() - t0:.1f}s -> {runs_dir}")

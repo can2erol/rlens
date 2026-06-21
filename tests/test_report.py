@@ -27,6 +27,20 @@ def test_expand_cells_grid_format():
     assert len(cells) == 6  # 2 x 1 x 3
 
 
+def test_expand_cells_run_level_fields():
+    spec = {
+        "seeds": [0],
+        "runs": [
+            {"algo": "dqn", "env": "LunarLander-v3", "num_envs": 4,
+             "update_every": 4, "gradient_steps": 1, "learning_starts": 10000},
+        ],
+    }
+    cell = _expand_cells(spec)[0]
+    assert cell["train"] == {
+        "num_envs": 4, "update_every": 4, "gradient_steps": 1, "learning_starts": 10000,
+    }
+
+
 def test_summarize_and_markdown(tmp_path):
     for seed in (0, 1):
         train_single(
