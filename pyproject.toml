@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rlens"
-version = "0.1.0"
+dynamic = ["version"]
 description = "An observability-first reinforcement-learning training & benchmarking library."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -53,6 +53,9 @@ Issues = "https://github.com/can2erol/rlens/issues"
 
 [project.scripts]
 rlens = "rlens.cli:app"
+
+[tool.setuptools.dynamic]
+version = { attr = "rlens.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["rlens*"]
