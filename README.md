@@ -80,17 +80,27 @@ dashboard is fully decoupled from training and adds no overhead to the hot loop.
 rlens reproduces commonly reported reference returns. Full methodology, specs and per-seed
 numbers are in [`benchmarks/`](benchmarks/); headline results (best policy, 3 seeds, CPU):
 
-| algorithm | env | eval return | reference | |
-|-----------|-----|-------------|-----------|---|
+| algorithm | env | eval return | reference | status |
+|-----------|-----|-------------|-----------|:---:|
 | PPO | CartPole-v1 | 500.0 ± 0.0 | ≥ 475 (solved) | ✅ |
 | DQN | CartPole-v1 | 500.0 ± 0.0 | ≥ 475 (solved) | ✅ |
 | PPO | Acrobot-v1 | −86.4 ± 4.9 | ≥ −100 | ✅ |
 | DQN | Acrobot-v1 | −81.1 ± 0.6 | ≥ −100 | ✅ |
 | SAC | Pendulum-v1 | −131.4 ± 0.3 | ≥ −250 | ✅ |
+| PPO | LunarLander-v3 | 229.9 ± 9.4 | ≥ 200 (solved) | ✅ |
 | DQN | LunarLander-v3 | 251.5 ± 9.7 | ≥ 200 (solved) | ✅ |
 
-Reproduce with `rlens bench benchmarks/classic_control.yaml --runs-dir runs_bench` then
-`rlens report runs_bench --targets benchmarks/classic_control.yaml --best`.
+Reproduce:
+
+```bash
+# classic control
+rlens bench benchmarks/classic_control.yaml --runs-dir runs_bench
+rlens report runs_bench --targets benchmarks/classic_control.yaml --best
+
+# LunarLander (needs the box2d extra)
+rlens bench benchmarks/lunarlander.yaml --runs-dir runs_lander
+rlens report runs_lander --targets benchmarks/lunarlander.yaml --best
+```
 
 ## Training & configuration
 

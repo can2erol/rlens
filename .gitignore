@@ -16,7 +16,7 @@ dist/
 # rlens run artifacts
 runs/
 runs_*/
-*_progress.log
+*.log
 
 # os
 .DS_Store

@@ -43,7 +43,7 @@ def _compatible(algo: str, env_id: str) -> bool:
 
 
 # run-level (TrainConfig) fields a `runs:` entry may set, beyond algo hyperparameters
-_RUN_LEVEL = ("num_envs", "update_every", "gradient_steps", "learning_starts")
+_RUN_LEVEL = ("num_envs", "rollout_len", "update_every", "gradient_steps", "learning_starts")
 
 
 def _expand_cells(spec: dict[str, Any]) -> list[dict[str, Any]]:

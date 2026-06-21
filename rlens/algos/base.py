@@ -39,8 +39,15 @@ class Algorithm(ABC):
 
     # ---- learning ---------------------------------------------------------
     def update_on_policy(
-        self, buffer, bootstrap_obs: torch.Tensor, bootstrap_done: torch.Tensor, rec: Recorder, step: int
+        self,
+        buffer,
+        bootstrap_obs: torch.Tensor,
+        bootstrap_done: torch.Tensor,
+        rec: Recorder,
+        step: int,
+        progress: float = 1.0,
     ) -> None:  # pragma: no cover
+        """``progress`` is the fraction of total training elapsed (0→1), for LR schedules."""
         raise NotImplementedError
 
     def value_of(self, obs: torch.Tensor) -> torch.Tensor | None:

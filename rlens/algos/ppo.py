@@ -34,6 +34,7 @@ class PPOConfig:
     norm_adv: bool = True
     clip_vloss: bool = True
     target_kl: float | None = None
+    anneal_lr: bool = False           # opt-in: linearly decay LR to 0 over training
     hidden: tuple[int, ...] = (64, 64)
 
 
@@ -108,9 +109,23 @@ class PPO(Algorithm):
 
     # ---- learning ---------------------------------------------------------
     def update_on_policy(
-        self, buffer, bootstrap_obs: torch.Tensor, bootstrap_done: torch.Tensor, rec: Recorder, step: int
+        self,
+        buffer,
+        bootstrap_obs: torch.Tensor,
+        bootstrap_done: torch.Tensor,
+        rec: Recorder,
+        step: int,
+        progress: float = 1.0,
     ) -> None:
         cfg = self.cfg
+        # linear LR annealing — stabilizes late training (e.g. PPO drifting after solving)
+        if cfg.anneal_lr:
+            lr_now = cfg.lr * max(0.0, 1.0 - progress)
+            for g in self.opt.param_groups:
+                g["lr"] = lr_now
+        else:
+            lr_now = cfg.lr
+
         last_value = self._value(bootstrap_obs)
         buffer.compute_advantages(last_value, bootstrap_done, cfg.gamma, cfg.gae_lambda)
 
@@ -183,6 +198,7 @@ class PPO(Algorithm):
                 "ppo/approx_kl": float(approx_kl),
                 "ppo/clipfrac": float(np.mean(clipfracs)) if clipfracs else 0.0,
                 "ppo/explained_variance": explained_var,
+                "ppo/lr": lr_now,
                 **grad_metrics,
             },
             step=step,

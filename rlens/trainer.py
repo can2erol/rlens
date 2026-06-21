@@ -177,7 +177,8 @@ class Trainer:
                 action_log.append(np.asarray(action_np))
                 self._log_episodes(infos)
 
-            algo.update_on_policy(buf, next_obs, next_done, self.rec, self.global_step)
+            progress = min(1.0, self.global_step / self.total_steps)
+            algo.update_on_policy(buf, next_obs, next_done, self.rec, self.global_step, progress)
 
             update += 1
             if update % self.log_interval_updates == 0:

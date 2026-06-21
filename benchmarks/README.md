@@ -47,9 +47,13 @@ Spec: [`lunarlander.yaml`](lunarlander.yaml) (needs `pip install -e ".[box2d]"`)
 | algo | env | seeds | eval return (best) | reference | status |
 |------|-----|-------|--------------------|-----------|--------|
 | dqn | LunarLander-v3 | 3 | 251.5 ± 9.7 | ≥ 200 | ✅ solved |
-| ppo | LunarLander-v3 | 3 | 50.5 ± 68.7 | ≥ 200 | 🚧 learning |
+| ppo | LunarLander-v3 | 3 | 229.9 ± 9.4 | ≥ 200 | ✅ solved |
 
-**DQN solves LunarLander** — final 224 ± 47, best 251.5 ± 9.7 — and the whole 3-seed run
-took ~10 min on CPU using the off-policy throughput knobs (single env, replay ratio ¼).
-**PPO is still climbing** at 1M steps (seeds reach +130–160 then oscillate); it needs
-learning-rate annealing + a larger budget to clear the bar — tracked as a follow-up.
+**Both algorithms solve LunarLander.** DQN (final 224 ± 47, best 251.5 ± 9.7) runs in ~10 min
+on CPU via the off-policy throughput knobs (single env, replay ratio ¼).
+
+PPO needed the right recipe, not more brute force: LunarLander's decisive reward (land/crash)
+arrives 200–1000 steps in, so the short-horizon default (`gamma=0.99`) can't credit-assign it.
+Switching to **`gamma=0.999`, `gae_lambda=0.98`**, longer rollouts (16 envs × 1024 steps) and
+256 minibatches takes PPO from ~50 → **229.8 ± 9.8** (final ≈ best, tight spread — robustly
+landing). Notably, LR annealing did *not* help here; long-horizon credit assignment did.

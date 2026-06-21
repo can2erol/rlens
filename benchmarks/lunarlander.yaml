@@ -17,9 +17,12 @@ eval_episodes: 10
 runs:
   - algo: ppo
     env: LunarLander-v3
-    steps: 1000000
-    num_envs: 8
-    overrides: { ent_coef: 0.01 }
+    steps: 2500000
+    num_envs: 16
+    rollout_len: 1024
+    # long-horizon recipe: LunarLander's big reward is at the end (land/crash), so a high
+    # discount + GAE-lambda are essential to credit-assign it (cf. SB3 rl-zoo).
+    overrides: { gamma: 0.999, gae_lambda: 0.98, ent_coef: 0.01, num_minibatches: 256 }
 
   - algo: dqn
     env: LunarLander-v3

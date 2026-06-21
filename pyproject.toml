@@ -40,7 +40,9 @@ dependencies = [
 # Box2D envs (LunarLander, BipedalWalker) need a compiler/swig — kept optional so the
 # core install stays painless. `pip install rlens[box2d]`.
 box2d = ["gymnasium[box2d]>=0.29"]
-dev = ["pytest>=8.0", "ruff>=0.4"]
+# httpx is required by Starlette's TestClient (used in the dashboard API tests);
+# it is not pulled in automatically, so declare it explicitly.
+dev = ["pytest>=8.0", "ruff>=0.4", "httpx>=0.27"]
 
 [project.urls]
 Homepage = "https://github.com/can2erol/rlens"
