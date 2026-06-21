@@ -12,9 +12,11 @@ web dashboard: reward curves, per-layer gradient norms, action distributions, an
 video — live, while you train, overlaid across runs. Built on PyTorch and Gymnasium, designed
 to run on a laptop (Apple Silicon / CPU, no CUDA required).
 
-![A PPO policy balancing CartPole-v1](docs/demo.gif)
+![The rlens dashboard: PPO and DQN runs overlaid on LunarLander-v3, with reward curves, an all-metrics grid, and per-layer gradient norms](docs/dashboard.png)
 
-*A trained PPO policy balancing CartPole-v1 (regenerate with `python scripts/make_demo_gif.py`).*
+*The live dashboard — PPO and DQN runs overlaid on LunarLander-v3: reward curves, an
+all-metrics grid (losses, gradient norms, eval, …), and a run-comparison table, updating
+while you train.*
 
 ## Why rlens
 
@@ -77,6 +79,10 @@ running job, a finished one, or a whole benchmark grid:
 
 It reads the same SQLite stores the trainer writes (WAL mode → safe concurrent reads), so the
 dashboard is fully decoupled from training and adds no overhead to the hot loop.
+
+The rollout player lets you *watch the policy itself* improve, not just its return curve:
+
+![A trained policy's rollout, played inline in the dashboard](docs/demo.gif)
 
 ## Benchmarks
 
