@@ -18,7 +18,7 @@ import torch.nn.functional as F
 from rlens.algos.base import Algorithm
 from rlens.core.buffers import ReplayBuffer
 from rlens.core.env import EnvManager
-from rlens.core.networks import QNetwork
+from rlens.core.networks import CNNQNetwork, QNetwork
 from rlens.telemetry.grads import grad_norm_metrics
 from rlens.telemetry.recorder import Recorder
 
@@ -45,11 +45,15 @@ class DQN(Algorithm):
         if not env.is_discrete:
             raise ValueError("DQN requires a discrete action space")
         self.cfg = cfg or DQNConfig()
-        self.q = QNetwork(env.obs_dim, env.act_dim, self.cfg.hidden).to(device)
+        if env.is_image:
+            self.q: nn.Module = CNNQNetwork(env.obs_shape, env.act_dim).to(device)
+        else:
+            self.q = QNetwork(env.obs_dim, env.act_dim, self.cfg.hidden).to(device)
         self.q_target = copy.deepcopy(self.q).to(device)
         self.opt = torch.optim.Adam(self.q.parameters(), lr=self.cfg.lr)
         self.buffer = ReplayBuffer(
-            self.cfg.buffer_size, env.obs_dim, (), device, action_dtype=np.int64
+            self.cfg.buffer_size, env.obs_shape, (), device,
+            action_dtype=np.int64, obs_dtype=env.obs_dtype,
         )
         self.t = 0          # env steps observed (drives epsilon)
         self.updates = 0

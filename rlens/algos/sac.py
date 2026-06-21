@@ -66,7 +66,7 @@ class SAC(Algorithm):
         else:
             self.alpha = self.cfg.alpha
 
-        self.buffer = ReplayBuffer(self.cfg.buffer_size, env.obs_dim, (env.act_dim,), device)
+        self.buffer = ReplayBuffer(self.cfg.buffer_size, env.obs_shape, (env.act_dim,), device)
         self.updates = 0
 
     def modules(self) -> dict[str, nn.Module]:

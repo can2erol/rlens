@@ -182,13 +182,32 @@ dramatically faster — often just as good when the default over-updates. On DQN
 rlens train --algo sac --env Pendulum-v1 --num-envs 8 --update-every 8 --gradient-steps 2
 ```
 
+## Image observations & Atari
+
+Any env with a 3-D Box observation automatically gets a **Nature-CNN encoder** (Mnih et al.
+2015) instead of an MLP. Images travel as **uint8** (the encoder normalizes), so replay memory
+stays feasible, and channels-last frames are transposed to channel-first for you.
+
+```bash
+pip install -e ".[atari]"
+rlens train --algo dqn --env ALE/Breakout-v5     # 84x84 grayscale, 4-frame stack, CNN
+rlens train --algo ppo --env ALE/Pong-v5
+```
+
+Atari ids (`ALE/...`) get the standard 84×84 grayscale + frame-skip + 4-frame-stack pipeline;
+DQN and PPO handle discrete-action image envs.
+
+> Reaching published Atari *scores* needs ~10M frames and a GPU. On CPU/MPS the full pipeline
+> runs and learns (verified end-to-end on a synthetic image task in the test suite), but
+> reproducing benchmark scores is out of scope for laptop hardware.
+
 ## Algorithms
 
-| Algorithm | Type | Action space |
-|-----------|------|--------------|
-| PPO | on-policy | discrete + continuous |
-| DQN | off-policy | discrete |
-| SAC | off-policy | continuous |
+| Algorithm | Type | Action space | Observations |
+|-----------|------|--------------|--------------|
+| PPO | on-policy | discrete + continuous | vector + image |
+| DQN | off-policy | discrete | vector + image |
+| SAC | off-policy | continuous | vector |
 
 All three share one trainer and one telemetry layer.
 

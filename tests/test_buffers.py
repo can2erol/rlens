@@ -42,7 +42,7 @@ def test_gae_done_cuts_bootstrap():
 
 def test_rollout_buffer_minibatches_cover_all():
     T, N, obs_dim = 8, 2, 4
-    buf = RolloutBuffer(T, N, obs_dim, (), torch.device("cpu"))
+    buf = RolloutBuffer(T, N, (obs_dim,), (), torch.device("cpu"))
     for _ in range(T):
         buf.add(
             torch.randn(N, obs_dim),

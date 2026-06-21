@@ -71,6 +71,11 @@ class Trainer:
     def _t(self, x: np.ndarray) -> torch.Tensor:
         return torch.as_tensor(x, dtype=torch.float32, device=self.device)
 
+    def _obs_t(self, x: np.ndarray) -> torch.Tensor:
+        # images travel as uint8 (the CNN encoder normalizes); vectors as float32
+        dt = torch.uint8 if self.env.is_image else torch.float32
+        return torch.as_tensor(x, dtype=dt, device=self.device)
+
     def _log_episodes(self, infos: dict) -> None:
         if "episode" not in infos:
             return
@@ -139,11 +144,12 @@ class Trainer:
     def _train_on_policy(self) -> None:
         env, algo, N = self.env, self.algo, self.env.num_envs
         action_shape = () if env.is_discrete else (env.act_dim,)
-        buf = RolloutBuffer(self.rollout_len, N, env.obs_dim, action_shape, self.device)
+        obs_dtype = torch.uint8 if env.is_image else torch.float32
+        buf = RolloutBuffer(self.rollout_len, N, env.obs_shape, action_shape, self.device, obs_dtype)
         gamma = getattr(algo, "gamma", 0.99)
 
         next_obs_np, _ = env.reset()
-        next_obs = self._t(next_obs_np)
+        next_obs = self._obs_t(next_obs_np)
         next_done = torch.zeros(N, device=self.device)
 
         update = 0
@@ -159,8 +165,8 @@ class Trainer:
                 # bootstrap value for *truncated* (time-limit) episodes
                 trunc_only = np.asarray(trunc) & ~np.asarray(term)
                 if trunc_only.any():
-                    final = extract_final_obs(infos, N, env.obs_dim)
-                    vf = algo.value_of(self._t(final)) if final is not None else None
+                    final = extract_final_obs(infos, N, env.obs_shape, env.obs_dtype)
+                    vf = algo.value_of(self._obs_t(final)) if final is not None else None
                     if vf is not None:
                         reward = reward + gamma * vf.detach().cpu().numpy() * trunc_only
 
@@ -172,7 +178,7 @@ class Trainer:
                     next_done,
                     extras["value"],
                 )
-                next_obs = self._t(step_obs)
+                next_obs = self._obs_t(step_obs)
                 next_done = self._t((np.asarray(term) | np.asarray(trunc)).astype(np.float32))
                 action_log.append(np.asarray(action_np))
                 self._log_episodes(infos)
@@ -194,7 +200,7 @@ class Trainer:
     def _train_off_policy(self) -> None:
         env, algo, N = self.env, self.algo, self.env.num_envs
         next_obs_np, _ = env.reset()
-        next_obs = self._t(next_obs_np)
+        next_obs = self._obs_t(next_obs_np)
         action_log: list[np.ndarray] = []
         updates = 0
         steps_since_train = 0  # env steps collected since the last training trigger
@@ -211,8 +217,8 @@ class Trainer:
             reward = np.asarray(reward, dtype=np.float32)
 
             # store true terminal obs (SAME_STEP autoreset replaces it in step_obs)
-            real_next = np.asarray(step_obs, dtype=np.float32).copy()
-            final = extract_final_obs(infos, N, env.obs_dim)
+            real_next = np.asarray(step_obs, dtype=env.obs_dtype).copy()
+            final = extract_final_obs(infos, N, env.obs_shape, env.obs_dtype)
             if final is not None:
                 fin_mask = np.asarray(infos["_final_obs"])
                 real_next[fin_mask] = final[fin_mask]
@@ -228,8 +234,8 @@ class Trainer:
                 }
             )
 
-            next_obs_np = np.asarray(step_obs, dtype=np.float32)
-            next_obs = self._t(next_obs_np)
+            next_obs_np = np.asarray(step_obs, dtype=env.obs_dtype)
+            next_obs = self._obs_t(next_obs_np)
             action_log.append(np.asarray(action_np))
             self._log_episodes(infos)
 

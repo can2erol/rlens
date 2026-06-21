@@ -34,8 +34,3 @@ def enable_mps_fallback() -> None:
     Must be set before the offending op runs; safe to call unconditionally.
     """
     os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
-
-
-def default_dtype(device: torch.device) -> torch.dtype:
-    """float32 everywhere — MPS does not support float64."""
-    return torch.float32

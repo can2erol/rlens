@@ -16,13 +16,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import gymnasium as gym
 import numpy as np
 import torch
 
 from rlens.algos.base import Algorithm
 from rlens.core.device import enable_mps_fallback, pick_device
-from rlens.core.env import EnvManager
+from rlens.core.env import EnvManager, make_env
 from rlens.telemetry.store import read_meta
 
 
@@ -40,7 +39,7 @@ def evaluate(
 
     Each episode gets a distinct seed (``seed + i``) for a stable-but-varied sample.
     """
-    env = gym.make(env_id)
+    env = make_env(env_id)
     returns: list[float] = []
     lengths: list[int] = []
     try:
@@ -50,9 +49,13 @@ def evaluate(
             steps = 0
             done = False
             while not done and steps < max_steps:
-                obs_t = torch.as_tensor(
-                    np.asarray(obs, dtype=np.float32).ravel(), device=device
-                ).unsqueeze(0)
+                arr = np.asarray(obs)
+                if arr.ndim >= 3:  # image obs (C, H, W) — keep shape & uint8 for the CNN
+                    obs_t = torch.as_tensor(arr, dtype=torch.uint8, device=device).unsqueeze(0)
+                else:
+                    obs_t = torch.as_tensor(
+                        arr.ravel().astype(np.float32), device=device
+                    ).unsqueeze(0)
                 action_np, _ = algo.act(obs_t, deterministic=deterministic)
                 obs, reward, term, trunc, _ = env.step(action_np[0])
                 total += float(reward)

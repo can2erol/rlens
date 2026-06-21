@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import platform
 import subprocess
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
+from dataclasses import dataclass, field
 from typing import Any
-
-import yaml
 
 
 @dataclass
@@ -31,9 +28,6 @@ class TrainConfig:
     record_video: bool = False
     video_interval_steps: int = 20_000
     algo_overrides: dict[str, Any] = field(default_factory=dict)
-
-    def to_yaml(self, path: Path) -> None:
-        Path(path).write_text(yaml.safe_dump(asdict(self), sort_keys=False))
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> TrainConfig:

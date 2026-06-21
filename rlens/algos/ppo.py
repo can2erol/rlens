@@ -15,7 +15,13 @@ import torch.nn as nn
 
 from rlens.algos.base import Algorithm
 from rlens.core.env import EnvManager
-from rlens.core.networks import CategoricalActor, Critic, GaussianActor
+from rlens.core.networks import (
+    CategoricalActor,
+    CNNCategoricalActor,
+    CNNCritic,
+    Critic,
+    GaussianActor,
+)
 from rlens.telemetry.grads import grad_norm_metrics
 from rlens.telemetry.recorder import Recorder
 
@@ -44,11 +50,17 @@ class PPO(Algorithm):
     def __init__(self, env: EnvManager, device: torch.device, cfg: PPOConfig | None = None):
         super().__init__(env, device)
         self.cfg = cfg or PPOConfig()
-        if env.is_discrete:
-            self.actor: nn.Module = CategoricalActor(env.obs_dim, env.act_dim, self.cfg.hidden)
+        if env.is_image:
+            if not env.is_discrete:
+                raise NotImplementedError("PPO supports image obs for discrete actions only")
+            self.actor: nn.Module = CNNCategoricalActor(env.obs_shape, env.act_dim)
+            self.critic: nn.Module = CNNCritic(env.obs_shape)
+        elif env.is_discrete:
+            self.actor = CategoricalActor(env.obs_dim, env.act_dim, self.cfg.hidden)
+            self.critic = Critic(env.obs_dim, self.cfg.hidden)
         else:
             self.actor = GaussianActor(env.obs_dim, env.act_dim, self.cfg.hidden)
-        self.critic = Critic(env.obs_dim, self.cfg.hidden)
+            self.critic = Critic(env.obs_dim, self.cfg.hidden)
         self.actor.to(device)
         self.critic.to(device)
         self.opt = torch.optim.Adam(

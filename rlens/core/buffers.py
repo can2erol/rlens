@@ -59,15 +59,16 @@ class RolloutBuffer:
         self,
         rollout_len: int,
         num_envs: int,
-        obs_dim: int,
+        obs_shape: tuple[int, ...],
         action_shape: tuple[int, ...],
         device: torch.device,
+        obs_dtype: torch.dtype = torch.float32,
     ):
         self.rollout_len = rollout_len
         self.num_envs = num_envs
         self.device = device
         T, N = rollout_len, num_envs
-        self.obs = torch.zeros((T, N, obs_dim), device=device)
+        self.obs = torch.zeros((T, N, *obs_shape), dtype=obs_dtype, device=device)
         self.actions = torch.zeros((T, N, *action_shape), device=device)
         self.logprobs = torch.zeros((T, N), device=device)
         self.rewards = torch.zeros((T, N), device=device)
@@ -102,7 +103,7 @@ class RolloutBuffer:
         batch_size = self.rollout_len * self.num_envs
         mb_size = batch_size // num_minibatches
         flat = {
-            "obs": self.obs.reshape(batch_size, -1),
+            "obs": self.obs.reshape(batch_size, *self.obs.shape[2:]),
             "actions": self.actions.reshape(batch_size, *self.actions.shape[2:]),
             "logprobs": self.logprobs.reshape(batch_size),
             "advantages": self.advantages.reshape(batch_size),
@@ -125,15 +126,16 @@ class ReplayBuffer:
     def __init__(
         self,
         capacity: int,
-        obs_dim: int,
+        obs_shape: tuple[int, ...],
         action_shape: tuple[int, ...],
         device: torch.device,
         action_dtype=np.float32,
+        obs_dtype=np.float32,
     ):
         self.capacity = capacity
         self.device = device
-        self.obs = np.zeros((capacity, obs_dim), dtype=np.float32)
-        self.next_obs = np.zeros((capacity, obs_dim), dtype=np.float32)
+        self.obs = np.zeros((capacity, *obs_shape), dtype=obs_dtype)
+        self.next_obs = np.zeros((capacity, *obs_shape), dtype=obs_dtype)
         self.actions = np.zeros((capacity, *action_shape), dtype=action_dtype)
         self.rewards = np.zeros((capacity,), dtype=np.float32)
         self.dones = np.zeros((capacity,), dtype=np.float32)
@@ -155,13 +157,13 @@ class ReplayBuffer:
     def sample(self, batch_size: int) -> dict[str, Any]:
         idx = np.random.randint(0, self.size, size=batch_size)
         t = lambda a, dt=torch.float32: torch.as_tensor(a, dtype=dt, device=self.device)  # noqa: E731
+        # obs keep their stored dtype (uint8 for images — the encoder normalizes)
         return {
-            "obs": t(self.obs[idx]),
+            "obs": torch.as_tensor(self.obs[idx], device=self.device),
             "actions": t(self.actions[idx]),
             "rewards": t(self.rewards[idx]),
-            "next_obs": t(self.next_obs[idx]),
+            "next_obs": torch.as_tensor(self.next_obs[idx], device=self.device),
             "dones": t(self.dones[idx]),
-            "idx": idx,
         }
 
     def __len__(self) -> int:

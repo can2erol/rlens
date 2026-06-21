@@ -31,12 +31,3 @@ def grad_norm_metrics(module: nn.Module, prefix: str = "grad_norm") -> dict[str,
             total_sq += float(p.grad.detach().pow(2).sum().item())
     metrics[f"{prefix}/global"] = total_sq**0.5
     return metrics
-
-
-@torch.no_grad()
-def flat_grads(module: nn.Module) -> torch.Tensor:
-    """All gradients flattened into one 1-D tensor (for histogramming)."""
-    grads = [p.grad.detach().reshape(-1) for p in module.parameters() if p.grad is not None]
-    if not grads:
-        return torch.empty(0)
-    return torch.cat(grads)

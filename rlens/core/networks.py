@@ -29,6 +29,67 @@ def mlp(sizes: list[int], activation: type[nn.Module] = nn.Tanh, std: float = np
     return nn.Sequential(*layers)
 
 
+class NatureCNN(nn.Module):
+    """Mnih et al. (2015) convolutional encoder for image observations.
+
+    Expects channel-first ``(C, H, W)`` inputs in the [0, 255] range (uint8 or float);
+    normalizes internally. Produces a ``features``-dim vector for downstream heads.
+    """
+
+    def __init__(self, obs_shape: tuple[int, ...], features: int = 512):
+        super().__init__()
+        c = obs_shape[0]
+        self.conv = nn.Sequential(
+            layer_init(nn.Conv2d(c, 32, 8, stride=4)), nn.ReLU(),
+            layer_init(nn.Conv2d(32, 64, 4, stride=2)), nn.ReLU(),
+            layer_init(nn.Conv2d(64, 64, 3, stride=1)), nn.ReLU(),
+            nn.Flatten(),
+        )
+        with torch.no_grad():
+            n_flat = self.conv(torch.zeros(1, *obs_shape)).shape[1]
+        self.fc = nn.Sequential(layer_init(nn.Linear(n_flat, features)), nn.ReLU())
+        self.features = features
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        return self.fc(self.conv(obs.float() / 255.0))
+
+
+class CNNCategoricalActor(nn.Module):
+    """Discrete policy over image observations (PPO on Atari)."""
+
+    def __init__(self, obs_shape: tuple[int, ...], act_dim: int, features: int = 512):
+        super().__init__()
+        self.enc = NatureCNN(obs_shape, features)
+        self.head = layer_init(nn.Linear(features, act_dim), std=0.01)
+
+    def dist(self, obs: torch.Tensor) -> Categorical:
+        return Categorical(logits=self.head(self.enc(obs)))
+
+
+class CNNCritic(nn.Module):
+    """State-value function V(s) over image observations."""
+
+    def __init__(self, obs_shape: tuple[int, ...], features: int = 512):
+        super().__init__()
+        self.enc = NatureCNN(obs_shape, features)
+        self.head = layer_init(nn.Linear(features, 1), std=1.0)
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        return self.head(self.enc(obs)).squeeze(-1)
+
+
+class CNNQNetwork(nn.Module):
+    """Discrete action-value network over image observations (DQN on Atari)."""
+
+    def __init__(self, obs_shape: tuple[int, ...], act_dim: int, features: int = 512):
+        super().__init__()
+        self.enc = NatureCNN(obs_shape, features)
+        self.head = layer_init(nn.Linear(features, act_dim), std=1.0)
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        return self.head(self.enc(obs))
+
+
 class CategoricalActor(nn.Module):
     """Discrete policy: logits -> Categorical."""
 

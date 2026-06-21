@@ -40,6 +40,8 @@ dependencies = [
 # Box2D envs (LunarLander, BipedalWalker) need a compiler/swig — kept optional so the
 # core install stays painless. `pip install rlens[box2d]`.
 box2d = ["gymnasium[box2d]>=0.29"]
+# Atari (image observations via the Nature-CNN); ROMs ship with ale-py.
+atari = ["ale-py>=0.9", "gymnasium[atari]>=0.29"]
 # httpx is required by Starlette's TestClient (used in the dashboard API tests);
 # it is not pulled in automatically, so declare it explicitly.
 dev = ["pytest>=8.0", "ruff>=0.4", "httpx>=0.27"]
