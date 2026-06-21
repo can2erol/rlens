@@ -65,8 +65,11 @@ rlens report runs --episodes 20
 `rlens dashboard` serves a live, no-build web UI that *tails* run directories — attach to a
 running job, a finished one, or a whole benchmark grid:
 
-- **Reward curves** for any logged metric, **overlaying multiple runs**, with EMA **smoothing**
-  and a **step ↔ wall-time** x-axis toggle.
+- A featured **reward curve** for any logged metric, **overlaying multiple runs**, with EMA
+  **smoothing** and a **step ↔ wall-time** x-axis toggle.
+- An **all-metrics grid** — every logged scalar at once (losses, KL, clipfrac, explained
+  variance, per-layer gradient norms, eval curves, FPS), grouped by namespace and overlaid
+  across runs. The smoothing and x-axis controls apply to the whole grid.
 - A sortable **run-comparison table** (best/last return, eval score, steps, FPS, status).
 - A **config panel** showing exactly which hyperparameters produced a curve — with a **diff
   mode** that highlights what changed across selected runs.

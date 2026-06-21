@@ -2,15 +2,15 @@
 
 const PALETTE = ["#6ea8fe", "#3fb950", "#f0883e", "#db61a2", "#e3b341", "#56d4dd", "#f85149", "#a371f7"];
 const DEFAULT_A = "rollout/episodic_return";
-const DEFAULT_B = "grad_norm/actor/global";
 
 const state = {
   runs: [],            // [{id, status, algo, env, seed}]
   selected: new Set(), // run ids overlaid on charts
   focus: null,         // run id used for the histogram / config panel
   metricA: DEFAULT_A,
-  metricB: DEFAULT_B,
-  charts: {},          // id -> uPlot instance
+  charts: {},          // id -> uPlot instance (featured chart + histogram)
+  gridCharts: {},      // tag -> uPlot instance (metric grid)
+  gridData: {},        // run id -> { tag: {steps, values, times} } (cached for re-render)
   colorOf: {},         // run id -> color
   smoothing: 0.6,      // EMA weight on history (0 = raw)
   xaxis: "step",       // "step" | "time"
@@ -98,16 +98,10 @@ async function loadTags() {
     } catch (_) {}
   }
   const tags = [...tagSet].sort();
-  fillSelect("metricA", tags, state.metricA);
-  fillSelect("metricB", tags, state.metricB);
-}
-
-function fillSelect(elId, tags, current) {
-  const sel = document.getElementById(elId);
-  const keep = tags.includes(current) ? current : (tags[0] || "");
+  const sel = document.getElementById("metricA");
+  const keep = tags.includes(state.metricA) ? state.metricA : (tags[0] || "");
   sel.innerHTML = tags.map((t) => `<option ${t === keep ? "selected" : ""}>${t}</option>`).join("");
-  if (elId === "metricA") state.metricA = keep;
-  else state.metricB = keep;
+  state.metricA = keep;
 }
 
 // ---- chart drawing --------------------------------------------------------
@@ -212,6 +206,93 @@ async function drawHist() {
   };
   if (state.charts.hist) state.charts.hist.destroy();
   state.charts.hist = new uPlot(opts, [centers, h.counts], div);
+}
+
+// ---- metric grid (all logged scalars at once) -----------------------------
+function destroyGridCharts() {
+  for (const k in state.gridCharts) { try { state.gridCharts[k].destroy(); } catch (_) {} }
+  state.gridCharts = {};
+}
+
+async function fetchGridData() {
+  const data = {};
+  for (const id of state.selected) {
+    try { data[id] = (await api(`/api/runs/${id}/scalars_all`)).scalars; } catch (_) { data[id] = {}; }
+  }
+  state.gridData = data;
+}
+
+// Render from cached gridData, so smoothing/x-axis changes don't refetch.
+function renderMetricGrid() {
+  const div = document.getElementById("grid");
+  destroyGridCharts();
+  const ids = [...state.selected].filter((id) => state.gridData[id]);
+  if (!ids.length) { div.innerHTML = '<div class="empty">no runs selected</div>'; return; }
+  const tags = [...new Set(ids.flatMap((id) => Object.keys(state.gridData[id])))].sort();
+  if (!tags.length) { div.innerHTML = '<div class="empty">no metrics yet</div>'; return; }
+
+  // group by namespace (the part before the first "/")
+  const groups = {};
+  for (const t of tags) {
+    const g = t.includes("/") ? t.split("/")[0] : "misc";
+    (groups[g] ||= []).push(t);
+  }
+
+  div.innerHTML = "";
+  const useTime = state.xaxis === "time";
+  for (const g of Object.keys(groups).sort()) {
+    const head = document.createElement("div");
+    head.className = "mgroup-h";
+    head.textContent = g;
+    div.appendChild(head);
+    for (const tag of groups[g]) {
+      const cell = document.createElement("div");
+      cell.className = "mcell";
+      const title = document.createElement("div");
+      title.className = "mtitle";
+      title.textContent = tag.includes("/") ? tag.split("/").slice(1).join("/") : tag;
+      title.title = tag;
+      cell.appendChild(title);
+      const plot = document.createElement("div");
+      cell.appendChild(plot);
+      div.appendChild(cell);
+
+      const prepared = [];
+      for (const id of ids) {
+        const d = state.gridData[id][tag];
+        if (d && d.steps.length) {
+          const x = useTime && d.times && d.times.length ? d.times.map((v) => (v - d.times[0]) / 60) : d.steps;
+          prepared.push({ id, x, y: ema(d.values, state.smoothing) });
+        }
+      }
+      if (!prepared.length) { plot.innerHTML = '<div class="empty" style="padding:8px">—</div>'; continue; }
+      const data = mergeSeriesXY(prepared);
+      const series = [{}].concat(
+        prepared.map((s) => ({ stroke: colorFor(s.id), width: 1.25, spanGaps: true, points: { show: false } }))
+      );
+      state.gridCharts[tag] = new uPlot(
+        {
+          width: plot.clientWidth || 280,
+          height: 120,
+          scales: { x: { time: false } },
+          legend: { show: false },
+          cursor: { show: false },
+          axes: [
+            { stroke: "#6b7280", grid: { stroke: "#20242e" }, size: 22, font: "9px sans-serif" },
+            { stroke: "#6b7280", grid: { stroke: "#20242e" }, size: 38, font: "9px sans-serif" },
+          ],
+          series,
+        },
+        data,
+        plot
+      );
+    }
+  }
+}
+
+async function drawMetricGrid() {
+  await fetchGridData();
+  renderMetricGrid();
 }
 
 // ---- run comparison table -------------------------------------------------
@@ -356,7 +437,7 @@ document.getElementById("videoStep").addEventListener("change", (e) => {
 async function redraw() {
   await loadTags();
   await drawChart("chartA", "A", state.metricA);
-  await drawChart("chartB", "B", state.metricB);
+  await drawMetricGrid();
   await drawHist();
   await drawCompare();
   await drawConfig();
@@ -366,18 +447,16 @@ async function redraw() {
 document.getElementById("metricA").addEventListener("change", (e) => {
   state.metricA = e.target.value; drawChart("chartA", "A", state.metricA);
 });
-document.getElementById("metricB").addEventListener("change", (e) => {
-  state.metricB = e.target.value; drawChart("chartB", "B", state.metricB);
-});
+// smoothing & x-axis re-render from cache (no refetch) — keeps the slider snappy
 document.getElementById("smooth").addEventListener("input", (e) => {
   state.smoothing = Number(e.target.value) / 100;
   drawChart("chartA", "A", state.metricA);
-  drawChart("chartB", "B", state.metricB);
+  renderMetricGrid();
 });
 document.getElementById("xaxis").addEventListener("change", (e) => {
   state.xaxis = e.target.value;
   drawChart("chartA", "A", state.metricA);
-  drawChart("chartB", "B", state.metricB);
+  renderMetricGrid();
 });
 document.getElementById("diffToggle").addEventListener("change", (e) => {
   state.configDiff = e.target.checked;

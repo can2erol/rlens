@@ -69,3 +69,22 @@ def test_meta_and_summary_endpoints(tmp_path):
     assert s["return_last"] == 400.0   # last logged
     assert s["eval_best"] == 360.0
     assert s["fps"] == 1234.0
+
+    # scalars_all returns every tag's series in one request (powers the metric grid)
+    allsc = client.get(f"/api/runs/{name}/scalars_all").json()["scalars"]
+    assert set(allsc) == {"rollout/episodic_return", "eval/return_mean", "perf/steps_per_sec"}
+    assert allsc["eval/return_mean"]["values"] == [0.0, 90.0, 180.0, 270.0, 360.0]
+    assert len(allsc["eval/return_mean"]["times"]) == 5
+
+
+def test_scalars_all_downsamples(tmp_path):
+    with Recorder(tmp_path / "big") as rec:
+        rec.meta({"name": "big", "config": {"algo": "ppo"}})
+        for step in range(1000):
+            rec.scalar("loss/value", float(step), step=step)
+        rec.flush()
+    client = TestClient(create_app(tmp_path))
+    series = client.get("/api/runs/big/scalars_all", params={"max_points": 100}).json()
+    pts = series["scalars"]["loss/value"]
+    assert 0 < len(pts["steps"]) <= 100        # downsampled from 1000
+    assert len(pts["steps"]) == len(pts["values"]) == len(pts["times"])

@@ -48,6 +48,10 @@
   table.cfg td.k { color:var(--muted); width:230px; }
   table.cfg tr.diff td { background:#2a2030; color:#f0b37e; }
   .cfg-wrap { max-height:340px; overflow:auto; }
+  .mgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
+  .mcell { background:#12151b; border:1px solid var(--line); border-radius:8px; padding:6px 6px 2px; overflow:hidden; }
+  .mtitle { font-size:11px; color:var(--muted); margin:0 2px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mgroup-h { grid-column:1/-1; font-size:11px; text-transform:uppercase; color:var(--accent); letter-spacing:.6px; margin:8px 2px 0; opacity:.85; }
 </style>
 </head>
 <body>
@@ -75,15 +79,13 @@
       </select>
     </div>
     <div class="card"><div id="chartA"></div></div>
-    <div class="grid2">
-      <div class="card">
-        <h3>secondary metric · <select id="metricB"></select></h3>
-        <div id="chartB"></div>
-      </div>
-      <div class="card">
-        <h3 id="histTitle">action distribution</h3>
-        <div id="chartHist"></div>
-      </div>
+    <div class="card" style="margin-top:14px">
+      <h3>all metrics</h3>
+      <div id="grid" class="mgrid"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3 id="histTitle">action distribution</h3>
+      <div id="chartHist"></div>
     </div>
     <div class="card" style="margin-top:14px">
       <h3>compare runs</h3>

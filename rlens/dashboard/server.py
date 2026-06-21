@@ -109,6 +109,26 @@ def create_app(runs_dir: Path) -> FastAPI:
             "fps": fps["last"],
         }
 
+    @app.get("/api/runs/{run_id}/scalars_all")
+    def api_scalars_all(run_id: str, max_points: int = 500) -> Any:
+        """Every scalar series for a run in one request (downsampled) — powers the metric grid."""
+        s = store_for(run_id)
+        try:
+            out: dict[str, Any] = {}
+            for tag in s.tags("scalars"):
+                rows = s.scalars(tag)
+                n = len(rows)
+                stride = max(1, n // max_points) if max_points and n > max_points else 1
+                sub = rows[::stride]
+                out[tag] = {
+                    "steps": [r["step"] for r in sub],
+                    "values": [r["value"] for r in sub],
+                    "times": [r["wall_time"] for r in sub],
+                }
+            return {"scalars": out}
+        finally:
+            s.close()
+
     @app.get("/api/runs/{run_id}/histogram")
     def api_histogram(run_id: str, tag: str) -> Any:
         s = store_for(run_id)
