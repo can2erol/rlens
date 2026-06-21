@@ -1,13 +1,14 @@
-# LunarLander-v3 benchmark — a genuinely harder env than classic control (Box2D physics,
-# 8-dim obs, 4 discrete actions; "solved" = mean return >= 200).
+# LunarLander-v3 benchmark — a Box2D control task (8-dim observation, 4 discrete actions,
+# with a large reward/penalty delivered at the end of the episode). "Solved" = mean return >= 200.
 #
 # Requires the Box2D extra:  pip install -e ".[box2d]"
 #
 #   rlens bench benchmarks/lunarlander.yaml --runs-dir runs_lander
 #   rlens report runs_lander --targets benchmarks/lunarlander.yaml --best --out benchmarks/lunarlander_results.md
 #
-# DQN uses the off-policy throughput knobs: a single env with update_every=4 (replay ratio
-# 1/4) keeps wall-clock sane while still learning. PPO uses 8 parallel envs.
+# DQN updates once per 4 environment steps (replay ratio 1/4) to keep training fast. PPO uses
+# a long-horizon configuration (high discount + GAE-lambda, 16 parallel envs) because the
+# decisive reward only arrives at the end of the episode.
 
 device: cpu
 seeds: [0, 1, 2]
