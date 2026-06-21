@@ -80,10 +80,6 @@ running job, a finished one, or a whole benchmark grid:
 It reads the same SQLite stores the trainer writes (WAL mode → safe concurrent reads), so the
 dashboard is fully decoupled from training and adds no overhead to the hot loop.
 
-The rollout player lets you *watch the policy itself* improve, not just its return curve:
-
-![A trained policy's rollout, played inline in the dashboard](docs/demo.gif)
-
 ## Benchmarks
 
 rlens reproduces commonly reported reference returns. Full methodology, specs and per-seed
