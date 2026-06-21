@@ -119,6 +119,30 @@ rlens train --resume runs/<run-name> --steps 1000000 # ...or extend it
 Only the newest few checkpoints are kept (`checkpoint_keep`, default 3). `policy.pt` (weights
 only, for `rlens eval`) is written separately.
 
+## Off-policy throughput
+
+DQN/SAC decouple **collection** from **updates**, so you can trade wall-clock against
+sample-efficiency:
+
+- `--num-envs N` — collect N transitions per step (vectorized envs).
+- `--update-every K` — env steps between training triggers.
+- `--gradient-steps G` — gradient updates per trigger.
+
+The *replay ratio* (`G / (K × N)`) is what matters. Defaults (`N=1, K=1, G=1`) match the
+classic one-update-per-step recipe; lowering the ratio is dramatically faster and often
+just as good when the default over-updates. On DQN/CartPole (20k steps, CPU):
+
+| config | wall | eval return |
+|--------|------|-------------|
+| `n1 update_every1 gs1` (default) | 9.4 s | 145.9 |
+| `n8 update_every8 gs8` (ratio 1) | 8.0 s | 169.1 |
+| `n8 update_every4 gs1` (ratio ⅛–¼) | 2.3 s | 225.4 |
+| `n8 update_every8 gs1` (ratio ⅛) | **1.3 s** | 185.4 |
+
+```bash
+rlens train --algo sac --env Pendulum-v1 --num-envs 8 --update-every 8 --gradient-steps 2
+```
+
 ## Algorithms
 
 | Algo | Type        | Action space |

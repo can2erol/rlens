@@ -29,6 +29,7 @@ class Trainer:
         total_steps: int,
         rollout_len: int = 128,
         update_every: int = 1,
+        gradient_steps: int = 1,
         learning_starts: int = 1000,
         log_interval_updates: int = 1,
         progress: bool = True,
@@ -46,7 +47,8 @@ class Trainer:
         self.device = device
         self.total_steps = total_steps
         self.rollout_len = rollout_len
-        self.update_every = update_every
+        self.update_every = max(1, update_every)
+        self.gradient_steps = max(1, gradient_steps)
         self.learning_starts = learning_starts
         self.log_interval_updates = log_interval_updates
         self.progress = progress
@@ -194,6 +196,8 @@ class Trainer:
         next_obs = self._t(next_obs_np)
         action_log: list[np.ndarray] = []
         updates = 0
+        steps_since_train = 0  # env steps collected since the last training trigger
+        last_log = 0
 
         while self.global_step < self.total_steps:
             self.global_step += N
@@ -228,10 +232,21 @@ class Trainer:
             action_log.append(np.asarray(action_np))
             self._log_episodes(infos)
 
-            if self.global_step >= self.learning_starts and self.global_step % self.update_every == 0:
-                algo.update_off_policy(self.rec, self.global_step)
-                updates += 1
-                if updates % 200 == 0:
+            # Training cadence is decoupled from collection: we collect N transitions per
+            # env step (N = num_envs) and, every `update_every` collected steps, run
+            # `gradient_steps` gradient updates. This keeps the replay ratio well-defined
+            # for any num_envs, and lets you trade speed vs sample-efficiency.
+            if self.global_step >= self.learning_starts:
+                steps_since_train += N
+                trained = False
+                while steps_since_train >= self.update_every:
+                    steps_since_train -= self.update_every
+                    for _ in range(self.gradient_steps):
+                        algo.update_off_policy(self.rec, self.global_step)
+                        updates += 1
+                    trained = True
+                if trained and updates - last_log >= 200:
+                    last_log = updates
                     self.rec.histogram(
                         "actions", np.concatenate([a.ravel() for a in action_log[-200:]]),
                         step=self.global_step,

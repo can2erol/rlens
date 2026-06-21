@@ -170,6 +170,7 @@ def run_config(
         total_steps=cfg.total_steps,
         rollout_len=cfg.rollout_len,
         update_every=cfg.update_every,
+        gradient_steps=cfg.gradient_steps,
         learning_starts=cfg.learning_starts,
         progress=progress,
         video_cb=video_cb,

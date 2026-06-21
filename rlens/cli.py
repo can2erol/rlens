@@ -24,6 +24,12 @@ def train(
     seed: int | None = typer.Option(None, help="Random seed."),
     device: str | None = typer.Option(None, help="auto | mps | cuda | cpu."),
     num_envs: int | None = typer.Option(None, help="Parallel envs (0/unset = auto)."),
+    update_every: int | None = typer.Option(
+        None, help="Off-policy: env steps between training triggers."
+    ),
+    gradient_steps: int | None = typer.Option(
+        None, help="Off-policy: gradient updates per training trigger."
+    ),
     config: Path | None = typer.Option(
         None, help="YAML run config used as the base (CLI flags and --set override it)."
     ),
@@ -77,6 +83,8 @@ def train(
         "seed": seed,
         "device": device,
         "num_envs": num_envs,
+        "update_every": update_every,
+        "gradient_steps": gradient_steps,
         "eval_interval_steps": eval_interval,
         "eval_episodes": eval_episodes,
         "checkpoint_interval_steps": checkpoint_interval,

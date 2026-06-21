@@ -20,7 +20,8 @@ class TrainConfig:
     device: str = "auto"
     num_envs: int = 0              # 0 = auto (1 for off-policy, 8 for on-policy)
     rollout_len: int = 128            # on-policy only
-    update_every: int = 1             # off-policy: env steps between updates
+    update_every: int = 1             # off-policy: env steps between training triggers
+    gradient_steps: int = 1           # off-policy: gradient updates per training trigger
     learning_starts: int = 1000       # off-policy: random steps before learning
     log_interval_updates: int = 1
     eval_interval_steps: int = 0
