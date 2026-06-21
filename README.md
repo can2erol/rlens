@@ -1,5 +1,6 @@
 # rlens
 
+[![PyPI](https://img.shields.io/pypi/v/rlens.svg)](https://pypi.org/project/rlens/)
 [![CI](https://github.com/can2erol/rlens/actions/workflows/ci.yml/badge.svg)](https://github.com/can2erol/rlens/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -44,15 +45,14 @@ experiment tracking — reach for RLlib, Stable-Baselines3, or Weights & Biases 
 ## Install
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+pip install rlens
 
-# optional: Box2D envs (LunarLander, BipedalWalker) — needs a compiler/swig
-pip install -e ".[dev,box2d]"
+# optional extras:
+pip install "rlens[box2d]"   # LunarLander, BipedalWalker (needs a compiler/swig)
+pip install "rlens[atari]"   # Atari / image observations
 ```
 
-Requires Python 3.11+.
+Requires Python 3.11+. Runs on CPU or Apple Silicon (MPS); no CUDA required.
 
 ## Quickstart
 
@@ -189,7 +189,7 @@ Any env with a 3-D Box observation automatically gets a **Nature-CNN encoder** (
 stays feasible, and channels-last frames are transposed to channel-first for you.
 
 ```bash
-pip install -e ".[atari]"
+pip install "rlens[atari]"
 rlens train --algo dqn --env ALE/Breakout-v5     # 84x84 grayscale, 4-frame stack, CNN
 rlens train --algo ppo --env ALE/Pong-v5
 ```
@@ -228,7 +228,9 @@ configs/        example train / benchmark configs
 ## Development
 
 ```bash
+git clone https://github.com/can2erol/rlens && cd rlens
 pip install -e ".[dev]"
+
 ruff check rlens tests     # lint
 pytest                     # full suite (CPU; ~1 min)
 ```
