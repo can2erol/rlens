@@ -7,10 +7,11 @@
 **An observability-first reinforcement-learning library — see what your policy is doing, not
 just its loss curve.**
 
-rlens trains PPO, DQN and SAC on a single shared trainer and streams everything to a local
-web dashboard: reward curves, per-layer gradient norms, action distributions, and rollout
-video — live, while you train, overlaid across runs. Built on PyTorch and Gymnasium, designed
-to run on a laptop (Apple Silicon / CPU, no CUDA required).
+rlens is a local, zero-setup workbench for *understanding, debugging, and comparing* RL runs
+on a single machine. It trains PPO, DQN and SAC on one shared trainer and streams everything
+to a built-in web dashboard — reward curves, per-layer gradient norms, action distributions,
+and rollout video, live and overlaid across runs. Built on PyTorch and Gymnasium; runs on a
+laptop (Apple Silicon / CPU, no CUDA required).
 
 ![The rlens dashboard: PPO and DQN runs overlaid on LunarLander-v3, with reward curves, an all-metrics grid, and per-layer gradient norms](docs/dashboard.png)
 
@@ -31,6 +32,16 @@ while you train.*
   `--resume`.
 - **One trainer, three algorithms.** Adding an algorithm means writing `act()` and `update()`;
   observability comes for free.
+
+## Who it's for
+
+rlens is built for **learning RL, debugging training runs, and benchmarking ideas on one
+machine** — students, educators, and solo researchers who want to *see* why an agent is (or
+isn't) learning without standing up a tracking service. It stays small, local, and readable
+by design.
+
+It is **not** aimed at distributed / multi-GPU training, large algorithm zoos, or hosted
+experiment tracking — for those, reach for RLlib, Stable-Baselines3, or Weights & Biases.
 
 ## Install
 
