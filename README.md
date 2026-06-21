@@ -4,18 +4,31 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-An **observability-first** reinforcement-learning training & benchmarking library, built on
-PyTorch and Gymnasium. The headline feature is *visibility*: a local web dashboard that
-streams reward curves, per-layer gradient norms, action/value distributions, and rollout
-video — live, while you train — and overlays multiple runs for benchmarking.
+**An observability-first reinforcement-learning library — see what your policy is doing, not
+just its loss curve.**
 
-![A PPO policy balancing CartPole-v1 after ~60k steps](docs/demo.gif)
+rlens trains PPO, DQN and SAC on a single shared trainer and streams everything to a local
+web dashboard: reward curves, per-layer gradient norms, action distributions, and rollout
+video — live, while you train, overlaid across runs. Built on PyTorch and Gymnasium, designed
+to run on a laptop (Apple Silicon / CPU, no CUDA required).
 
-*A PPO policy balancing CartPole-v1 after ~60k steps. Regenerate with
-`python scripts/make_demo_gif.py`.*
+![A PPO policy balancing CartPole-v1](docs/demo.gif)
 
-> Designed and tested on Apple Silicon (M-series, MPS). No CUDA required.
-> **Status:** early/alpha — the API may still change.
+*A trained PPO policy balancing CartPole-v1 (regenerate with `python scripts/make_demo_gif.py`).*
+
+## Why rlens
+
+- **See the policy, not just the loss.** A zero-setup dashboard with multi-run reward curves,
+  gradient norms, action histograms, and inline rollout video — no W&B account, no TensorBoard
+  process to babysit.
+- **Benchmark & compare.** One command runs an (algorithm × env × seed) grid; a sortable
+  comparison table and a config-diff view turn a sweep into a single glance.
+- **Reproduced & trustworthy.** PPO/DQN/SAC match reference returns on standard envs
+  ([benchmarks](benchmarks/)), and every run snapshots its config, library versions and git SHA.
+- **Resumable & robust.** Full-state checkpoints, automatic best-policy saving, and crash-safe
+  `--resume`.
+- **One trainer, three algorithms.** Adding an algorithm means writing `act()` and `update()`;
+  observability comes for free.
 
 ## Install
 
@@ -28,87 +41,103 @@ pip install -e ".[dev]"
 pip install -e ".[dev,box2d]"
 ```
 
+Requires Python 3.11+.
+
 ## Quickstart
 
 ```bash
-# train a policy (writes telemetry to ./runs/<run-name>)
+# 1. train a policy (telemetry streams to ./runs/<run-name>)
 rlens train --algo ppo --env CartPole-v1
 
-# in another terminal, watch it learn
-rlens dashboard         # open http://127.0.0.1:8000
+# 2. in another terminal, watch it learn live
+rlens dashboard                       # → http://127.0.0.1:8000
 
-# score a trained policy and record a rollout video
-rlens eval runs/<run-name> --episodes 10 --video
+# 3. score the trained policy and record a rollout video
+rlens eval runs/<run-name> --episodes 20 --video
 
-# benchmark a grid of algo x env x seed
-rlens bench configs/bench.yaml
+# 4. run a benchmark grid, then summarize it as a table
+rlens bench configs/bench.yaml --runs-dir runs
+rlens report runs --episodes 20
 ```
 
 ## Dashboard
 
-`rlens dashboard` serves a live, no-build web UI (open http://127.0.0.1:8000) that tails the
-run directories — attach to a live run, a finished one, or a whole benchmark grid:
+`rlens dashboard` serves a live, no-build web UI that *tails* run directories — attach to a
+running job, a finished one, or a whole benchmark grid:
 
-- **Reward curves** for any logged metric, **overlaying multiple runs** with EMA **smoothing**
+- **Reward curves** for any logged metric, **overlaying multiple runs**, with EMA **smoothing**
   and a **step ↔ wall-time** x-axis toggle.
-- A **run-comparison table** (sortable: best/last return, eval, steps, FPS, status) so a grid
-  is one glance, not twelve tabs.
-- A **config panel** showing exactly which hyperparameters produced a curve — with a
-  **diff mode** that highlights what changed across the selected runs.
+- A sortable **run-comparison table** (best/last return, eval score, steps, FPS, status).
+- A **config panel** showing exactly which hyperparameters produced a curve — with a **diff
+  mode** that highlights what changed across selected runs.
 - Auto-captured **gradient norms**, **action distributions**, and inline **rollout video**.
 
 It reads the same SQLite stores the trainer writes (WAL mode → safe concurrent reads), so the
-dashboard is fully decoupled from training.
+dashboard is fully decoupled from training and adds no overhead to the hot loop.
 
-## Evaluation
+## Benchmarks
 
-Training returns mix in exploration (epsilon-greedy, stochastic sampling), so they
-undersell a policy. `rlens eval` loads a run's `policy.pt` and scores it greedily:
+rlens reproduces commonly reported reference returns. Full methodology, specs and per-seed
+numbers are in [`benchmarks/`](benchmarks/); headline results (best policy, 3 seeds, CPU):
 
-```bash
-rlens eval runs/ppo-CartPole-v1-s0-20260619  # mean ± std return over 10 episodes
-rlens eval runs/<name> --episodes 20 --video # also writes videos/eval.mp4
-rlens eval runs/<name> --stochastic          # sample actions instead of greedy
-rlens eval runs/<name> --best                # score the best-eval checkpoint
-```
+| algorithm | env | eval return | reference | |
+|-----------|-----|-------------|-----------|---|
+| PPO | CartPole-v1 | 500.0 ± 0.0 | ≥ 475 (solved) | ✅ |
+| DQN | CartPole-v1 | 500.0 ± 0.0 | ≥ 475 (solved) | ✅ |
+| PPO | Acrobot-v1 | −86.4 ± 4.9 | ≥ −100 | ✅ |
+| DQN | Acrobot-v1 | −81.1 ± 0.6 | ≥ −100 | ✅ |
+| SAC | Pendulum-v1 | −131.4 ± 0.3 | ≥ −250 | ✅ |
+| DQN | LunarLander-v3 | 251.5 ± 9.7 | ≥ 200 (solved) | ✅ |
 
-To track a clean eval curve *during* training (logged as `eval/return_mean`, distinct
-from the noisy `rollout/episodic_return`), pass `--eval-interval`:
+Reproduce with `rlens bench benchmarks/classic_control.yaml --runs-dir runs_bench` then
+`rlens report runs_bench --targets benchmarks/classic_control.yaml --best`.
 
-```bash
-rlens train --algo dqn --env CartPole-v1 --eval-interval 5000 --eval-episodes 10
-```
+## Training & configuration
 
-With eval enabled, training also saves `best_policy.pt` — the highest-scoring policy, not
-just the last (RL often drifts after it first solves a task). Score it with `rlens eval
---best`, and see `benchmarks/` for reproduced reference results.
-
-## Configuration
-
-Set any hyperparameter from the command line with `--set key=value` — algorithm knobs
-(`lr`, `gamma`, `batch_size`, `hidden`, ...) and run-level knobs (`num_envs`, `rollout_len`,
-`learning_starts`, ...) share one namespace and are type-checked against the config schema:
+Set any hyperparameter from the command line with `--set key=value`. Algorithm knobs (`lr`,
+`gamma`, `batch_size`, `hidden`, …) and run-level knobs (`num_envs`, `rollout_len`,
+`learning_starts`, …) share one namespace and are type-checked against the config schema — an
+unknown key fails immediately and lists the valid ones:
 
 ```bash
 rlens train --algo sac --env Pendulum-v1 --set lr=3e-4 --set hidden=[256,256] --set tau=0.01
 ```
 
-An unknown key fails immediately and lists the valid ones. For repeatable runs, put the
-config in YAML and override pieces on the command line:
+For repeatable runs, keep the config in YAML and override pieces on the command line:
 
 ```bash
 rlens train --config configs/ppo_cartpole.yaml --steps 200000 --set lr=1e-3
 ```
 
-Precedence is **defaults < `--config` < explicit flags < `--set`**. The fully-resolved
-config (including library versions and git SHA) is saved to each run's `run.json`.
+Precedence is **defaults < `--config` < explicit flags < `--set`**. The fully-resolved config
+(plus library versions and git SHA) is saved to each run's `run.json`.
 
-## Checkpoints & resume
+## Evaluation & best policy
 
-Every run writes a final checkpoint; pass `--checkpoint-interval` to also checkpoint
-periodically (a crash at step 90k then costs you minutes, not the whole run). A checkpoint
-captures the *full* training state — weights, optimizer momentum, target networks, counters
-and RNG — so resuming continues exactly where it left off rather than cold-starting:
+Training returns mix in exploration, so they undersell a policy. `rlens eval` loads a run and
+scores it greedily:
+
+```bash
+rlens eval runs/<run-name>                   # mean ± std return over 10 episodes
+rlens eval runs/<run-name> --episodes 20 --video
+rlens eval runs/<run-name> --stochastic      # sample actions instead of greedy
+rlens eval runs/<run-name> --best            # score the best-eval checkpoint
+```
+
+Pass `--eval-interval` to log a clean `eval/return_mean` curve *during* training (distinct from
+the noisy `rollout/episodic_return`). When eval is enabled, training also saves
+`best_policy.pt` — the highest-scoring policy, not just the last (RL often drifts after it
+first solves a task):
+
+```bash
+rlens train --algo dqn --env CartPole-v1 --eval-interval 5000 --eval-episodes 10
+```
+
+## Checkpointing & resume
+
+Every run writes a final checkpoint; `--checkpoint-interval` adds periodic ones. A checkpoint
+captures the *full* training state — weights, optimizer momentum, target networks, counters and
+RNG — so `--resume` continues exactly where it stopped instead of cold-starting:
 
 ```bash
 rlens train --algo dqn --env CartPole-v1 --steps 500000 --checkpoint-interval 50000
@@ -116,28 +145,23 @@ rlens train --resume runs/<run-name>                 # finish the original budge
 rlens train --resume runs/<run-name> --steps 1000000 # ...or extend it
 ```
 
-Only the newest few checkpoints are kept (`checkpoint_keep`, default 3). `policy.pt` (weights
-only, for `rlens eval`) is written separately.
+The newest few checkpoints are kept (`checkpoint_keep`, default 3); `policy.pt` (weights only,
+for `rlens eval`) is written separately.
 
 ## Off-policy throughput
 
-DQN/SAC decouple **collection** from **updates**, so you can trade wall-clock against
-sample-efficiency:
+DQN and SAC decouple **collection** from **updates**, so you can trade wall-clock against
+sample-efficiency. The *replay ratio* (`gradient_steps / (update_every × num_envs)`) is what
+matters; defaults match the classic one-update-per-step recipe, and lowering the ratio is
+dramatically faster — often just as good when the default over-updates. On DQN/CartPole
+(20k steps, CPU):
 
-- `--num-envs N` — collect N transitions per step (vectorized envs).
-- `--update-every K` — env steps between training triggers.
-- `--gradient-steps G` — gradient updates per trigger.
-
-The *replay ratio* (`G / (K × N)`) is what matters. Defaults (`N=1, K=1, G=1`) match the
-classic one-update-per-step recipe; lowering the ratio is dramatically faster and often
-just as good when the default over-updates. On DQN/CartPole (20k steps, CPU):
-
-| config | wall | eval return |
-|--------|------|-------------|
-| `n1 update_every1 gs1` (default) | 9.4 s | 145.9 |
-| `n8 update_every8 gs8` (ratio 1) | 8.0 s | 169.1 |
-| `n8 update_every4 gs1` (ratio ⅛–¼) | 2.3 s | 225.4 |
-| `n8 update_every8 gs1` (ratio ⅛) | **1.3 s** | 185.4 |
+| `--num-envs` | `--update-every` | `--gradient-steps` | wall | eval return |
+|:---:|:---:|:---:|:---:|:---:|
+| 1 | 1 | 1 (default) | 9.4 s | 145.9 |
+| 8 | 8 | 8 | 8.0 s | 169.1 |
+| 8 | 4 | 1 | 2.3 s | 225.4 |
+| 8 | 8 | 1 | **1.3 s** | 185.4 |
 
 ```bash
 rlens train --algo sac --env Pendulum-v1 --num-envs 8 --update-every 8 --gradient-steps 2
@@ -145,25 +169,26 @@ rlens train --algo sac --env Pendulum-v1 --num-envs 8 --update-every 8 --gradien
 
 ## Algorithms
 
-| Algo | Type        | Action space |
-|------|-------------|--------------|
-| PPO  | on-policy   | discrete + continuous |
-| DQN  | off-policy  | discrete |
-| SAC  | off-policy  | continuous |
+| Algorithm | Type | Action space |
+|-----------|------|--------------|
+| PPO | on-policy | discrete + continuous |
+| DQN | off-policy | discrete |
+| SAC | off-policy | continuous |
 
-All three share one trainer and one telemetry layer, so adding an algorithm means writing
-`act()` and `update()` — observability comes for free.
+All three share one trainer and one telemetry layer.
 
-## Layout
+## Project layout
 
 ```
 rlens/
   core/         device, seeding, envs, buffers, networks
   algos/        ppo, dqn, sac (+ base Algorithm)
   trainer.py    shared on-policy / off-policy loop
-  telemetry/    recorder, sqlite store, frame/video writers
-  experiment/   config, single-run, benchmark grid
+  telemetry/    recorder, SQLite store, gradient & frame/video capture
+  experiment/   config, single-run, benchmark grid, eval, report
   dashboard/    FastAPI server + no-build static SPA
+benchmarks/     reproducible benchmark specs + results
+configs/        example train / benchmark configs
 ```
 
 ## Development
@@ -175,3 +200,12 @@ pytest                     # full suite (CPU; ~1 min)
 ```
 
 CI runs `ruff` + `pytest` on Python 3.11 and 3.12 for every push and pull request.
+
+## Status
+
+Early/alpha — the public API may still change. Issues and contributions are welcome.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Bundles [uPlot](https://github.com/leeoniya/uPlot) (MIT); see
+[THIRD_PARTY.md](THIRD_PARTY.md).
