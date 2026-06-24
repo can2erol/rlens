@@ -136,6 +136,27 @@ class TelemetryStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def histogram_series(self, tag: str, max_snapshots: int = 200) -> list[dict[str, Any]]:
+        """All histogram snapshots for a tag, oldest→newest, downsampled to ``max_snapshots``.
+
+        Powers the dashboard's distribution-over-time view: each snapshot is one column of
+        the heatmap. Downsampling keeps the payload bounded for long runs.
+        """
+        rows = self._conn.execute(
+            "SELECT id, step, wall_time, counts, edges FROM histograms WHERE tag=? ORDER BY id",
+            (tag,),
+        ).fetchall()
+        n = len(rows)
+        if max_snapshots and n > max_snapshots:
+            rows = rows[:: max(1, n // max_snapshots)]
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["counts"] = json.loads(d["counts"])
+            d["edges"] = json.loads(d["edges"])
+            out.append(d)
+        return out
+
     def latest_histogram(self, tag: str) -> dict[str, Any] | None:
         row = self._conn.execute(
             "SELECT id, step, wall_time, counts, edges FROM histograms "

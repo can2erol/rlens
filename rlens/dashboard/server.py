@@ -138,6 +138,15 @@ def create_app(runs_dir: Path) -> FastAPI:
         finally:
             s.close()
 
+    @app.get("/api/runs/{run_id}/histogram_series")
+    def api_histogram_series(run_id: str, tag: str, max_snapshots: int = 200) -> Any:
+        """Every histogram snapshot for a tag (downsampled) — powers the inspector heatmap."""
+        s = store_for(run_id)
+        try:
+            return {"tag": tag, "snapshots": s.histogram_series(tag, max_snapshots=max_snapshots)}
+        finally:
+            s.close()
+
     @app.get("/api/runs/{run_id}/episodes")
     def api_episodes(run_id: str, after_id: int = 0) -> Any:
         s = store_for(run_id)

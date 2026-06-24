@@ -49,6 +49,9 @@ def train(
     checkpoint_interval: int | None = typer.Option(
         None, help="Env steps between checkpoints (0 = only a final checkpoint)."
     ),
+    inspect_interval: int | None = typer.Option(
+        None, help="Env steps between weight/grad distribution snapshots (0 = auto, <0 = off)."
+    ),
 ) -> None:
     """Train a single policy and stream telemetry to a run dir.
 
@@ -88,6 +91,7 @@ def train(
         "eval_interval_steps": eval_interval,
         "eval_episodes": eval_episodes,
         "checkpoint_interval_steps": checkpoint_interval,
+        "inspect_interval_steps": inspect_interval,
     }
     for key, value in flag_overrides.items():
         if value is not None:

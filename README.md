@@ -14,16 +14,17 @@ to a built-in web dashboard — reward curves, per-layer gradient norms, action 
 and rollout video, live and overlaid across runs. Built on PyTorch and Gymnasium; runs on a
 laptop (Apple Silicon / CPU, no CUDA required).
 
-![The rlens dashboard: PPO and DQN runs overlaid on LunarLander-v3, with reward curves, an all-metrics grid, and per-layer gradient norms](docs/dashboard.png)
+![The rlens dashboard: PPO and DQN runs overlaid on CartPole-v1, showing reward curves, the policy-inspector heatmap of a layer's weight distribution over training, and an all-metrics grid](docs/dashboard.png)
 
-*The live dashboard — PPO and DQN runs overlaid on LunarLander-v3: reward curves, an
-all-metrics grid (losses, gradient norms, eval, …), and a run-comparison table, updating
-while you train.*
+*The live dashboard — PPO and DQN overlaid on CartPole-v1: reward curves, the **policy
+inspector** (per-layer weight & gradient distributions over training, as a heatmap), an
+all-metrics grid, and a run-comparison table — updating while you train.*
 
 ## Why rlens
 
 - **See the policy, not just the loss.** A zero-setup local dashboard — no W&B account, no
-  TensorBoard process to babysit (details below).
+  TensorBoard process to babysit. Watch per-layer weight & gradient *distributions* evolve
+  over training in the **policy inspector**, not just scalar norms (details below).
 - **Benchmark & compare.** One command runs an (algorithm × env × seed) grid; a sortable
   comparison table and a config-diff view turn a sweep into a single glance.
 - **Reproduced & trustworthy.** PPO/DQN/SAC match reference returns on standard envs
@@ -78,6 +79,10 @@ running job, a finished one, or a whole benchmark grid:
 
 - A featured **reward curve** for any logged metric, **overlaying multiple runs**, with EMA
   **smoothing** and a **step ↔ wall-time** x-axis toggle.
+- A **policy inspector** — per-layer **weight and gradient distributions** rendered as a
+  heatmap *over training* (x = step, y = value, colour = density). See weights spread or
+  saturate and gradients collapse, layer by layer — the introspection W&B/TensorBoard make
+  you wire up by hand.
 - An **all-metrics grid** — every logged scalar at once (losses, KL, clipfrac, explained
   variance, per-layer gradient norms, eval curves, FPS), grouped by namespace and overlaid
   across runs. The smoothing and x-axis controls apply to the whole grid.

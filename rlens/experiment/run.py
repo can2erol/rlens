@@ -95,6 +95,11 @@ def run_config(
     if cfg.num_envs <= 0:
         cfg.num_envs = 1 if cfg.algo.lower() in ("dqn", "sac") else 8
 
+    # policy inspector: 0 = auto (~50 weight/grad snapshots over the run); <0 = off
+    if cfg.inspect_interval_steps == 0:
+        cfg.inspect_interval_steps = max(1, cfg.total_steps // 50)
+    inspect_interval = max(0, cfg.inspect_interval_steps)
+
     algo, env_id, seed = cfg.algo, cfg.env_id, cfg.seed
 
     run_name = name or default_run_name(cfg)
@@ -179,6 +184,7 @@ def run_config(
         eval_interval=cfg.eval_interval_steps,
         checkpoint_cb=checkpoint_cb,
         checkpoint_interval=cfg.checkpoint_interval_steps,
+        inspect_interval=inspect_interval,
         start_step=start_step,
     )
 

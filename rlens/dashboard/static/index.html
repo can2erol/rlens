@@ -52,6 +52,12 @@
   .mcell { background:#12151b; border:1px solid var(--line); border-radius:8px; padding:6px 6px 2px; overflow:hidden; }
   .mtitle { font-size:11px; color:var(--muted); margin:0 2px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .mgroup-h { grid-column:1/-1; font-size:11px; text-transform:uppercase; color:var(--accent); letter-spacing:.6px; margin:8px 2px 0; opacity:.85; }
+  #inspectWrap { width:100%; }
+  #inspectHeat { width:100%; display:block; border-radius:6px; }
+  .insp-key { color:var(--muted); font-size:11px; display:flex; align-items:center; gap:6px; }
+  .insp-grad { display:inline-block; width:80px; height:10px; border-radius:2px;
+    background:linear-gradient(90deg,#10141c,#1b4a7a,#3b86d6,#9fd0ff); }
+  select optgroup { color:var(--muted); }
 </style>
 </head>
 <body>
@@ -79,6 +85,16 @@
       </select>
     </div>
     <div class="card"><div id="chartA"></div></div>
+    <div class="card" style="margin-top:14px">
+      <h3 id="inspectTitle">policy inspector · distribution over time</h3>
+      <div class="toolbar" style="margin-bottom:6px">
+        <label>layer</label>
+        <select id="inspectTag"></select>
+        <span class="spacer"></span>
+        <span class="insp-key">low<span class="insp-grad"></span>high</span>
+      </div>
+      <div id="inspectWrap"><canvas id="inspectHeat"></canvas></div>
+    </div>
     <div class="card" style="margin-top:14px">
       <h3>all metrics</h3>
       <div id="grid" class="mgrid"></div>

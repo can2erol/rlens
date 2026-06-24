@@ -16,6 +16,7 @@ import torch
 from rlens.algos.base import Algorithm
 from rlens.core.buffers import RolloutBuffer
 from rlens.core.env import EnvManager, extract_final_obs
+from rlens.telemetry.grads import grad_distributions, param_distributions
 from rlens.telemetry.recorder import Recorder
 
 
@@ -39,6 +40,7 @@ class Trainer:
         eval_interval: int = 0,
         checkpoint_cb=None,
         checkpoint_interval: int = 0,
+        inspect_interval: int = 0,
         start_step: int = 0,
     ):
         self.algo = algo
@@ -58,6 +60,7 @@ class Trainer:
         self.eval_interval = eval_interval
         self.checkpoint_cb = checkpoint_cb
         self.checkpoint_interval = checkpoint_interval
+        self.inspect_interval = inspect_interval
 
         self.global_step = start_step
         self._session_start_step = start_step
@@ -66,6 +69,7 @@ class Trainer:
         self._last_video_step = start_step
         self._last_eval_step = start_step
         self._last_checkpoint_step = start_step
+        self._last_inspect_step = start_step
 
     # ---- shared helpers ---------------------------------------------------
     def _t(self, x: np.ndarray) -> torch.Tensor:
@@ -115,6 +119,25 @@ class Trainer:
         if self.global_step - self._last_checkpoint_step >= self.checkpoint_interval:
             self._last_checkpoint_step = self.global_step
             self.checkpoint_cb(self.global_step)
+
+    def _maybe_inspect(self) -> None:
+        """Snapshot per-layer weight & gradient distributions (the 'policy inspector').
+
+        Trainer-owned and uniform across algos: weights are always readable, and gradients
+        persist on ``.grad`` from the most recent update (absent during warmup → skipped).
+        Capture is coarse (``inspect_interval`` env steps) since histograms are bulkier than
+        scalars.
+        """
+        if self.inspect_interval <= 0:
+            return
+        if self.global_step - self._last_inspect_step < self.inspect_interval:
+            return
+        self._last_inspect_step = self.global_step
+        for mod_name, module in self.algo.modules().items():
+            for tag, vals in param_distributions(module, prefix=f"weights/{mod_name}").items():
+                self.rec.histogram(tag, vals, step=self.global_step)
+            for tag, vals in grad_distributions(module, prefix=f"grads/{mod_name}").items():
+                self.rec.histogram(tag, vals, step=self.global_step)
 
     def _print_progress(self) -> None:
         if not self.progress:
@@ -195,6 +218,7 @@ class Trainer:
             self._maybe_video()
             self._maybe_eval()
             self._maybe_checkpoint()
+            self._maybe_inspect()
 
     # ---- off-policy (DQN/SAC) --------------------------------------------
     def _train_off_policy(self) -> None:
@@ -263,3 +287,4 @@ class Trainer:
             self._maybe_video()
             self._maybe_eval()
             self._maybe_checkpoint()
+            self._maybe_inspect()

@@ -25,6 +25,7 @@ class TrainConfig:
     eval_episodes: int = 10
     checkpoint_interval_steps: int = 0   # 0 = only a final checkpoint at the end
     checkpoint_keep: int = 3
+    inspect_interval_steps: int = 0   # weight/grad distribution snapshots; 0 = auto (~50/run)
     record_video: bool = False
     video_interval_steps: int = 20_000
     algo_overrides: dict[str, Any] = field(default_factory=dict)

@@ -8,6 +8,7 @@ const state = {
   selected: new Set(), // run ids overlaid on charts
   focus: null,         // run id used for the histogram / config panel
   metricA: DEFAULT_A,
+  inspectTag: null,    // histogram tag shown in the policy inspector heatmap
   charts: {},          // id -> uPlot instance (featured chart + histogram)
   gridCharts: {},      // tag -> uPlot instance (metric grid)
   gridData: {},        // run id -> { tag: {steps, values, times} } (cached for re-render)
@@ -77,12 +78,14 @@ function renderRuns() {
       else state.selected.delete(r.id);
       redraw();
     });
-    row.addEventListener("click", () => {
+    row.addEventListener("click", async () => {
       state.focus = r.id;
       renderRuns();
       drawHist();
       drawVideo();
       drawConfig();
+      await loadInspectTags();
+      drawInspector();
     });
     el.appendChild(row);
   }
@@ -206,6 +209,83 @@ async function drawHist() {
   };
   if (state.charts.hist) state.charts.hist.destroy();
   state.charts.hist = new uPlot(opts, [centers, h.counts], div);
+}
+
+// ---- policy inspector (weight/grad distribution over time) ----------------
+// A heatmap: x = training step, y = value bin, colour = density within that snapshot.
+// Lets you watch weights spread/saturate and gradients collapse as training proceeds.
+const INSP_STOPS = [[16, 20, 28], [27, 74, 122], [59, 134, 214], [159, 208, 255]];
+function inspColor(t) {
+  t = Math.max(0, Math.min(1, t));
+  const seg = t * (INSP_STOPS.length - 1);
+  const i = Math.min(INSP_STOPS.length - 2, Math.floor(seg));
+  const f = seg - i, a = INSP_STOPS[i], b = INSP_STOPS[i + 1];
+  return `rgb(${Math.round(a[0] + (b[0] - a[0]) * f)},${Math.round(a[1] + (b[1] - a[1]) * f)},${Math.round(a[2] + (b[2] - a[2]) * f)})`;
+}
+
+async function loadInspectTags() {
+  const sel = document.getElementById("inspectTag");
+  const id = state.focus;
+  if (!id) { sel.innerHTML = ""; return; }
+  let tags = [];
+  try { tags = (await api(`/api/runs/${id}/tags`)).histograms || []; } catch (_) {}
+  if (!tags.length) { sel.innerHTML = '<option value="">no distributions</option>'; state.inspectTag = null; return; }
+  // group by namespace; prefer a weights/* layer as the default focus
+  const groups = {};
+  for (const t of tags.sort()) ((groups[t.includes("/") ? t.split("/")[0] : "misc"] ||= []).push(t));
+  const keep = tags.includes(state.inspectTag) ? state.inspectTag
+    : (tags.find((t) => t.startsWith("weights/")) || tags[0]);
+  state.inspectTag = keep;
+  sel.innerHTML = Object.keys(groups).sort().map((g) =>
+    `<optgroup label="${g}">` + groups[g].map((t) =>
+      `<option value="${t}" ${t === keep ? "selected" : ""}>${t}</option>`).join("") + "</optgroup>"
+  ).join("");
+}
+
+async function drawInspector() {
+  const canvas = document.getElementById("inspectHeat");
+  const id = state.focus, tag = state.inspectTag;
+  const title = document.getElementById("inspectTitle");
+  title.textContent = "policy inspector · " + (tag ? tag : "distribution over time");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.clientWidth || 600, H = 240;
+  canvas.width = W; canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+  if (!id || !tag) return;
+  let snaps = [];
+  try { snaps = (await api(`/api/runs/${id}/histogram_series?tag=${encodeURIComponent(tag)}`)).snapshots || []; } catch (_) {}
+  snaps = snaps.filter((s) => s.counts && s.counts.length);
+  if (!snaps.length) {
+    ctx.fillStyle = "#8b94a7"; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("no distribution data — train with the inspector on", W / 2, H / 2);
+    return;
+  }
+  const padL = 52, padB = 18, padT = 6, padR = 8;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  // shared value (y) range across every snapshot
+  let vmin = Infinity, vmax = -Infinity;
+  for (const s of snaps) { vmin = Math.min(vmin, s.edges[0]); vmax = Math.max(vmax, s.edges[s.edges.length - 1]); }
+  if (vmax - vmin < 1e-12) { vmax = vmin + 1; }
+  const yOf = (v) => padT + plotH * (1 - (v - vmin) / (vmax - vmin));
+  const colW = plotW / snaps.length;
+  snaps.forEach((s, i) => {
+    const colMax = Math.max(1, ...s.counts);
+    const x0 = padL + i * colW;
+    for (let j = 0; j < s.counts.length; j++) {
+      const yTop = yOf(s.edges[j + 1]), yBot = yOf(s.edges[j]);
+      ctx.fillStyle = inspColor(s.counts[j] / colMax);
+      ctx.fillRect(x0, yTop, Math.ceil(colW) + 0.5, yBot - yTop + 0.5);
+    }
+  });
+  // axes labels
+  ctx.fillStyle = "#8b94a7"; ctx.font = "10px sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText(vmax.toPrecision(3), padL - 6, padT + 8);
+  ctx.fillText(vmin.toPrecision(3), padL - 6, padT + plotH);
+  ctx.textAlign = "left";
+  ctx.fillText("step " + (snaps[0].step ?? 0).toLocaleString(), padL, H - 5);
+  ctx.textAlign = "right";
+  ctx.fillText((snaps[snaps.length - 1].step ?? 0).toLocaleString(), W - padR, H - 5);
 }
 
 // ---- metric grid (all logged scalars at once) -----------------------------
@@ -439,10 +519,17 @@ async function redraw() {
   await drawChart("chartA", "A", state.metricA);
   await drawMetricGrid();
   await drawHist();
+  await loadInspectTags();
+  await drawInspector();
   await drawCompare();
   await drawConfig();
   await drawVideo();
 }
+
+document.getElementById("inspectTag").addEventListener("change", (e) => {
+  state.inspectTag = e.target.value;
+  drawInspector();
+});
 
 document.getElementById("metricA").addEventListener("change", (e) => {
   state.metricA = e.target.value; drawChart("chartA", "A", state.metricA);
